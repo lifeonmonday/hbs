@@ -10,7 +10,7 @@ class SpotifyTVPlatform {
 
     this.client = new SpotifyClient(config, log);
     this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
-    this.currentVolume = 50;
+    this.currentVolume = 30;
 
     this.api.on('didFinishLaunching', async () => {
       try {
