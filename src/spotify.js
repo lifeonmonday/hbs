@@ -13,16 +13,29 @@ class SpotifyClient {
     });
   }
 
-  async initializeAuth() {
+async initializeAuth() {
     if (this.config.authCode && !this.refreshToken) {
       this.log.info('Exchanging authorization code for initial tokens...');
       const data = await this.api.authorizationCodeGrant(this.config.authCode);
       this.refreshToken = data.body['refresh_token'];
       this.api.setRefreshToken(this.refreshToken);
       this.api.setAccessToken(data.body['access_token']);
-      this.log.info('Successfully acquired initial Refresh Token.');
+      
+      this.log.info('----------------------------------------------------');
+      this.log.info('YOUR REFRESH TOKEN (Save this in Homebridge Config):');
+      this.log.info(this.refreshToken);
+      this.log.info('----------------------------------------------------');
       return;
     }
+
+    if (this.refreshToken) {
+      this.api.setRefreshToken(this.refreshToken);
+      await this.refreshTokens();
+      return;
+    }
+
+    throw new Error('Neither authCode nor refreshToken provided in configuration.');
+  }
 
     if (this.refreshToken) {
       this.api.setRefreshToken(this.refreshToken);
