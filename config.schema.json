@@ -1,0 +1,15 @@
+{
+  "pluginAlias": "SpotifySmartSpeaker",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": { "type": "string", "default": "SpotifySmartSpeaker", "required": true },
+      "clientId": { "type": "string", "required": true },
+      "clientSecret": { "type": "string", "required": true },
+      "refreshToken": { "type": "string", "required": true },
+      "deviceId": { "type": "string", "required": true }
+    }
+  }
+}
