@@ -10,6 +10,7 @@ class SpotifySmartSpeakerPlatform {
 
     this.client = new SpotifyClient(config, log);
 
+    // Stany początkowe SmartSpeaker
     this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
     this.targetMediaState = this.Characteristic.TargetMediaState.PAUSE;
     this.currentVolume = 50;
@@ -25,53 +26,56 @@ class SpotifySmartSpeakerPlatform {
   }
 
   registerAccessory() {
+    // 1. Zmiana domyślnej nazwy na 'Spotify Speaker'
     const name = this.config.name || 'Spotify Speaker';
     const uuid = this.api.hap.uuid.generate(this.config.deviceId || 'spotify-smart-speaker');
     const accessory = new this.api.platformAccessory(name, uuid);
 
     accessory.category = this.api.hap.Categories.SPEAKER;
 
-    this.setupSpeakerAccessory(accessory);
+    this.setupSmartSpeaker(accessory);
     this.startPolling();
 
     this.api.publishExternalAccessories('homebridge-spotify-smart-speaker', [accessory]);
   }
 
-  setupSpeakerAccessory(accessory) {
+  setupSmartSpeaker(accessory) {
     accessory.getService(this.Service.AccessoryInformation)
       .setCharacteristic(this.Characteristic.Manufacturer, 'Spotify')
-      .setCharacteristic(this.Characteristic.Model, 'Connect Speaker')
+      .setCharacteristic(this.Characteristic.Model, 'Smart Speaker')
       .setCharacteristic(this.Characteristic.SerialNumber, this.config.deviceId || '123456');
 
-    // Smart Speaker / Television Service
-    this.tvService = accessory.addService(this.Service.Television, accessory.displayName);
-    this.tvService.setCharacteristic(this.Characteristic.ConfiguredName, accessory.displayName);
-    this.tvService.setCharacteristic(
-      this.Characteristic.SleepDiscoveryMode,
-      this.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE
-    );
+    // Główna usługa SmartSpeaker
+    this.speakerService = accessory.addService(this.Service.SmartSpeaker, accessory.displayName);
 
-    this.tvService.getCharacteristic(this.Characteristic.Active)
-      .onGet(() => (this.currentMediaState === this.Characteristic.CurrentMediaState.PLAY ? 1 : 0))
-      .onSet(async (value) => {
-        const target = value ? this.Characteristic.TargetMediaState.PLAY : this.Characteristic.TargetMediaState.PAUSE;
-        await this.setTargetMediaState(target);
-      });
-
-    this.tvService.getCharacteristic(this.Characteristic.CurrentMediaState)
+    // CurrentMediaState: Odczyt stanu (PLAY, PAUSE, STOP)
+    this.speakerService.getCharacteristic(this.Characteristic.CurrentMediaState)
       .onGet(() => this.currentMediaState);
 
-    this.tvService.getCharacteristic(this.Characteristic.TargetMediaState)
+    // TargetMediaState: Sterowanie (Play / Pause z kafelka)
+    this.speakerService.getCharacteristic(this.Characteristic.TargetMediaState)
       .onGet(() => this.targetMediaState)
-      .onSet(this.setTargetMediaState.bind(this));
+      .onSet(async (value) => {
+        this.targetMediaState = value;
+        try {
+          if (value === this.Characteristic.TargetMediaState.PLAY) {
+            await this.client.play(this.config.deviceId);
+            this.currentMediaState = this.Characteristic.CurrentMediaState.PLAY;
+          } else if (value === this.Characteristic.TargetMediaState.PAUSE) {
+            await this.client.pause(this.config.deviceId);
+            this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
+          } else {
+            await this.client.pause(this.config.deviceId);
+            this.currentMediaState = this.Characteristic.CurrentMediaState.STOP;
+          }
+          
+          this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
+        } catch (err) {
+          this.log.error('Playback state change error:', err.message);
+        }
+      });
 
-    // Linked Speaker Service for Volume control
-    this.speakerService = accessory.addService(this.Service.TelevisionSpeaker, `${accessory.displayName} Volume`);
-    this.speakerService.setCharacteristic(
-      this.Characteristic.VolumeControlType,
-      this.Characteristic.VolumeControlType.ABSOLUTE
-    );
-
+    // 3. Głośność (Volume)
     this.speakerService.getCharacteristic(this.Characteristic.Volume)
       .onGet(() => this.currentVolume)
       .onSet(async (value) => {
@@ -82,27 +86,6 @@ class SpotifySmartSpeakerPlatform {
           this.log.error('Volume adjustment error:', err.message);
         }
       });
-
-    this.tvService.addLinkedService(this.speakerService);
-  }
-
-  async setTargetMediaState(value) {
-    this.targetMediaState = value;
-    try {
-      if (value === this.Characteristic.TargetMediaState.PLAY) {
-        await this.client.play(this.config.deviceId);
-        this.currentMediaState = this.Characteristic.CurrentMediaState.PLAY;
-      } else {
-        await this.client.pause(this.config.deviceId);
-        this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
-      }
-
-      this.tvService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
-      this.tvService.updateCharacteristic(this.Characteristic.TargetMediaState, this.targetMediaState);
-      this.tvService.updateCharacteristic(this.Characteristic.Active, this.currentMediaState === this.Characteristic.CurrentMediaState.PLAY ? 1 : 0);
-    } catch (err) {
-      this.log.error('Playback state error:', err.message);
-    }
   }
 
   startPolling() {
@@ -111,29 +94,36 @@ class SpotifySmartSpeakerPlatform {
     setInterval(async () => {
       try {
         const state = await this.client.getPlaybackState();
-        if (!state || !state.device) return;
 
-        if (state.device.id === this.config.deviceId || !this.config.deviceId) {
-          this.currentMediaState = state.is_playing
-            ? this.Characteristic.CurrentMediaState.PLAY
-            : this.Characteristic.CurrentMediaState.PAUSE;
-
-          this.targetMediaState = this.currentMediaState;
-
-          if (state.device.volume_percent !== null) {
-            this.currentVolume = state.device.volume_percent;
-            this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
-          }
-
-          this.tvService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
-          this.tvService.updateCharacteristic(this.Characteristic.TargetMediaState, this.targetMediaState);
-          this.tvService.updateCharacteristic(
-            this.Characteristic.Active,
-            this.currentMediaState === this.Characteristic.CurrentMediaState.PLAY ? 1 : 0
-          );
+        // 2. Obsługa braku sesji / zniknięcia Chromecast z listy Spotify Connect
+        if (!state || !state.device || (this.config.deviceId && state.device.id !== this.config.deviceId)) {
+          this.currentMediaState = this.Characteristic.CurrentMediaState.STOP;
+          this.targetMediaState = this.Characteristic.TargetMediaState.PAUSE;
+          
+          this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
+          this.speakerService.updateCharacteristic(this.Characteristic.TargetMediaState, this.targetMediaState);
+          return;
         }
+
+        // Stan gdy urządzenie jest aktywne w Spotify
+        if (state.is_playing) {
+          this.currentMediaState = this.Characteristic.CurrentMediaState.PLAY;
+          this.targetMediaState = this.Characteristic.TargetMediaState.PLAY;
+        } else {
+          this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
+          this.targetMediaState = this.Characteristic.TargetMediaState.PAUSE;
+        }
+
+        // Aktualizacja głośności ze Spotify
+        if (state.device.volume_percent !== null && state.device.volume_percent !== undefined) {
+          this.currentVolume = state.device.volume_percent;
+          this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
+        }
+
+        this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
+        this.speakerService.updateCharacteristic(this.Characteristic.TargetMediaState, this.targetMediaState);
       } catch (err) {
-        // Silent catch during periodic sync
+        // Ciche odrzucenie błędów tła przy odświeżaniu
       }
     }, interval);
   }
