@@ -10,7 +10,9 @@ class SpotifyTVPlatform {
 
     this.client = new SpotifyClient(config, log);
     this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
-    this.currentVolume = 30;
+    this.currentVolume = 30; // Domyślny poziom głośności
+    this.currentTrack = '';
+    this.baseName = this.config.name || 'Spotify Speaker';
 
     this.api.on('didFinishLaunching', async () => {
       try {
@@ -23,26 +25,25 @@ class SpotifyTVPlatform {
   }
 
   registerAccessory() {
-    // Usunięto nawiasy (), aby uniknąć ostrzeżeń HAP
-    const name = (this.config.name || 'Spotify Speaker') + ' AVR';
+    const name = `${this.baseName} AVR`;
     const uuid = this.api.hap.uuid.generate((this.config.deviceId || 'spotify-speaker') + '-avr-test');
     const accessory = new this.api.platformAccessory(name, uuid);
 
-    // Kategoria zmieniona na AUDIO_RECEIVER
     accessory.category = this.api.hap.Categories.AUDIO_RECEIVER;
 
     accessory.getService(this.Service.AccessoryInformation)
       .setCharacteristic(this.Characteristic.Manufacturer, 'Spotify')
       .setCharacteristic(this.Characteristic.Model, 'Connect AVR UI');
 
+    // Główna usługa Television / AVR
     this.tvService = accessory.addService(this.Service.Television, accessory.displayName);
-    this.tvService.setCharacteristic(this.Characteristic.ConfiguredName, accessory.displayName);
+    this.tvService.setCharacteristic(this.Characteristic.ConfiguredName, name);
     this.tvService.setCharacteristic(
       this.Characteristic.SleepDiscoveryMode,
       this.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE
     );
 
-    // Stan zasilania / odtwarzania (Active)
+    // Stan odtwarzania (Play / Pause)
     this.tvService.getCharacteristic(this.Characteristic.Active)
       .onGet(() => (this.currentMediaState === this.Characteristic.CurrentMediaState.PLAY ? 1 : 0))
       .onSet(async (value) => {
@@ -55,13 +56,25 @@ class SpotifyTVPlatform {
             this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
           }
         } catch (err) {
-          this.log.error('Błąd odtwarzania AVR:', err.message);
+          this.log.error('Błąd sterowania zasilaniem:', err.message);
         }
       });
 
-    // Usługa Speaker do obsługi głośności oraz przycisków fizycznych
+    // Przechwytywanie przycisków z pilota iOS
+    this.tvService.getCharacteristic(this.Characteristic.RemoteKey)
+      .onSet(async (value) => {
+        if (value === this.Characteristic.RemoteKey.PLAY_PAUSE) {
+          const isPlaying = this.currentMediaState === this.Characteristic.CurrentMediaState.PLAY;
+          if (isPlaying) {
+            await this.client.pause(this.config.deviceId);
+          } else {
+            await this.client.play(this.config.deviceId);
+          }
+        }
+      });
+
+    // --- Usługa Głośności (TelevisionSpeaker) ---
     this.speakerService = accessory.addService(this.Service.TelevisionSpeaker, `${accessory.displayName} Volume`);
-    
     this.speakerService.setCharacteristic(
       this.Characteristic.VolumeControlType,
       this.Characteristic.VolumeControlType.ABSOLUTE
@@ -73,12 +86,12 @@ class SpotifyTVPlatform {
         try {
           await this.client.setVolume(value, this.config.deviceId);
           this.currentVolume = value;
+          this.syncActiveInputWithVolume(value);
         } catch (err) {
-          this.log.error('Błąd głośności AVR:', err.message);
+          this.log.error('Błąd głośności:', err.message);
         }
       });
 
-    // Skoki głośności przyciskami fizycznymi na telefonie (+/- 5%)
     this.speakerService.getCharacteristic(this.Characteristic.VolumeSelector)
       .onSet(async (value) => {
         try {
@@ -87,15 +100,76 @@ class SpotifyTVPlatform {
           await this.client.setVolume(newVol, this.config.deviceId);
           this.currentVolume = newVol;
           this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
+          this.syncActiveInputWithVolume(newVol);
         } catch (err) {
-          this.log.error('Błąd przycisków głośności AVR:', err.message);
+          this.log.error('Błąd przycisków głośności:', err.message);
         }
       });
 
     this.tvService.addLinkedService(this.speakerService);
 
+    // --- Tworzenie źródeł głośności (InputSource: 15%, 30%, 40%) ---
+    this.setupVolumeInputSources(accessory);
+
     this.startPolling();
     this.api.publishExternalAccessories('homebridge-spotify-smart-speaker', [accessory]);
+  }
+
+  setupVolumeInputSources(accessory) {
+    const levels = [
+      { id: 1, name: 'Głośność 15%', vol: 15 },
+      { id: 2, name: 'Głośność 30%', vol: 30 },
+      { id: 3, name: 'Głośność 40%', vol: 40 }
+    ];
+
+    levels.forEach((level) => {
+      const inputService = accessory.addService(
+        this.Service.InputSource,
+        `vol_${level.vol}`,
+        level.name
+      );
+
+      inputService
+        .setCharacteristic(this.Characteristic.Identifier, level.id)
+        .setCharacteristic(this.Characteristic.ConfiguredName, level.name)
+        .setCharacteristic(
+          this.Characteristic.IsConfigured,
+          this.Characteristic.IsConfigured.CONFIGURED
+        )
+        .setCharacteristic(
+          this.Characteristic.InputSourceType,
+          this.Characteristic.InputSourceType.APPLICATION
+        );
+
+      this.tvService.addLinkedService(inputService);
+    });
+
+    // Reakcja na wybór źródła w rozwijanej liście
+    this.tvService.getCharacteristic(this.Characteristic.ActiveIdentifier)
+      .onGet(() => this.getActiveInputIdentifier(this.currentVolume))
+      .onSet(async (value) => {
+        const targetLevel = levels.find((l) => l.id === value);
+        if (targetLevel) {
+          try {
+            await this.client.setVolume(targetLevel.vol, this.config.deviceId);
+            this.currentVolume = targetLevel.vol;
+            this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
+          } catch (err) {
+            this.log.error('Błąd zmiany poziomu głośności z listy:', err.message);
+          }
+        }
+      });
+  }
+
+  getActiveInputIdentifier(vol) {
+    if (vol <= 20) return 1; // 15%
+    if (vol <= 35) return 2; // 30%
+    return 3;                // 40%
+  }
+
+  syncActiveInputWithVolume(vol) {
+    const id = this.getActiveInputIdentifier(vol);
+    this.tvService.updateCharacteristic(this.Characteristic.ActiveIdentifier, id);
   }
 
   startPolling() {
@@ -113,9 +187,22 @@ class SpotifyTVPlatform {
           ? this.Characteristic.CurrentMediaState.PLAY
           : this.Characteristic.CurrentMediaState.PAUSE;
 
-        if (state.device.volume_percent !== null) {
+        // Aktualizacja głośności
+        if (state.device.volume_percent !== null && state.device.volume_percent !== undefined) {
           this.currentVolume = state.device.volume_percent;
           this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
+          this.syncActiveInputWithVolume(this.currentVolume);
+        }
+
+        // Dynamiczna aktualizacja nazwy z tytułem utworu ('Title · Artist')
+        if (state.item) {
+          const trackName = `${state.item.name} · ${state.item.artists.map((a) => a.name).join(', ')}`;
+          if (this.currentTrack !== trackName) {
+            this.currentTrack = trackName;
+            this.tvService.updateCharacteristic(this.Characteristic.ConfiguredName, trackName);
+          }
+        } else {
+          this.tvService.updateCharacteristic(this.Characteristic.ConfiguredName, `${this.baseName} AVR`);
         }
 
         this.tvService.updateCharacteristic(
