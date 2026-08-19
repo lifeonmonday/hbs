@@ -10,39 +10,32 @@ class SpotifyLightbulbPlatform {
 
     this.client = new SpotifyClient(config, log);
     this.isPlaying = false;
-    this.currentVolume = 50;
+    this.currentVolume = 30;
 
     this.api.on('didFinishLaunching', async () => {
       try {
         await this.client.initializeAuth();
         this.registerAccessory();
       } catch (err) {
-        this.log.error('Lightbulb Platform auth error:', err.message);
+        this.log.error('Błąd startu platformy Lightbulb:', err.message);
       }
     });
   }
 
   registerAccessory() {
-    const name = (this.config.name || 'Spotify Speaker') + ' (Light)';
-    const uuid = this.api.hap.uuid.generate((this.config.deviceId || 'spotify-speaker') + '-light');
+    // Usunięto nawiasy ()
+    const name = (this.config.name || 'Spotify Speaker') + ' Light';
+    const uuid = this.api.hap.uuid.generate((this.config.deviceId || 'spotify-speaker') + '-light-test');
     const accessory = new this.api.platformAccessory(name, uuid);
 
     accessory.category = this.api.hap.Categories.LIGHTBULB;
 
-    this.setupLightbulb(accessory);
-    this.startPolling();
-
-    this.api.publishExternalAccessories('homebridge-spotify-smart-speaker', [accessory]);
-  }
-
-  setupLightbulb(accessory) {
     accessory.getService(this.Service.AccessoryInformation)
       .setCharacteristic(this.Characteristic.Manufacturer, 'Spotify')
-      .setCharacteristic(this.Characteristic.Model, 'Connect Lightbulb UI');
+      .setCharacteristic(this.Characteristic.Model, 'Connect Light UI');
 
     this.service = accessory.addService(this.Service.Lightbulb, accessory.displayName);
 
-    // On / Off (Tap tile to Play / Pause)
     this.service.getCharacteristic(this.Characteristic.On)
       .onGet(() => this.isPlaying)
       .onSet(async (value) => {
@@ -55,11 +48,10 @@ class SpotifyLightbulbPlatform {
             this.isPlaying = false;
           }
         } catch (err) {
-          this.log.error('Playback error:', err.message);
+          this.log.error('Błąd odtwarzania Lightbulb:', err.message);
         }
       });
 
-    // Brightness (Slider for Volume 0-100%)
     this.service.getCharacteristic(this.Characteristic.Brightness)
       .onGet(() => this.currentVolume)
       .onSet(async (value) => {
@@ -67,9 +59,12 @@ class SpotifyLightbulbPlatform {
           await this.client.setVolume(value, this.config.deviceId);
           this.currentVolume = value;
         } catch (err) {
-          this.log.error('Volume error:', err.message);
+          this.log.error('Błąd głośności Lightbulb:', err.message);
         }
       });
+
+    this.startPolling();
+    this.api.publishExternalAccessories('homebridge-spotify-smart-speaker', [accessory]);
   }
 
   startPolling() {
