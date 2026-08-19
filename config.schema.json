@@ -1,15 +1,43 @@
 {
   "pluginAlias": "SpotifySmartSpeaker",
-  "pluginType": "platform",
-  "singular": true,
+  "pluginNodePackage": "homebridge-spotify-smart-speaker",
   "schema": {
     "type": "object",
     "properties": {
-      "name": { "type": "string", "default": "SpotifySmartSpeaker", "required": true },
-      "clientId": { "type": "string", "required": true },
-      "clientSecret": { "type": "string", "required": true },
-      "refreshToken": { "type": "string", "required": true },
-      "deviceId": { "type": "string", "required": true }
+      "name": {
+        "title": "Accessory Name",
+        "type": "string",
+        "default": "Spotify Speaker",
+        "required": true
+      },
+      "clientId": {
+        "title": "Client ID",
+        "type": "string",
+        "description": "Your Spotify Developer Application Client ID.",
+        "required": true
+      },
+      "clientSecret": {
+        "title": "Client Secret",
+        "type": "string",
+        "description": "Your Spotify Developer Application Client Secret.",
+        "required": true
+      },
+      "authCode": {
+        "title": "Authorization Code",
+        "type": "string",
+        "description": "Paste the 'code' parameter from the Spotify callback URL for initial token setup."
+      },
+      "refreshToken": {
+        "title": "Refresh Token",
+        "type": "string",
+        "description": "Optional: Existing Refresh Token if already generated."
+      },
+      "deviceId": {
+        "title": "Spotify Device ID",
+        "type": "string",
+        "description": "Target Spotify Connect Device ID.",
+        "required": true
+      }
     }
   }
 }
