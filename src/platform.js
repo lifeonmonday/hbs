@@ -13,7 +13,7 @@ class SpotifySmartSpeakerPlatform {
     // Stany początkowe SmartSpeaker
     this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
     this.targetMediaState = this.Characteristic.TargetMediaState.PAUSE;
-    this.currentVolume = 50;
+    this.currentVolume = 30;
 
     this.api.on('didFinishLaunching', async () => {
       try {
@@ -26,7 +26,6 @@ class SpotifySmartSpeakerPlatform {
   }
 
   registerAccessory() {
-    // 1. Zmiana domyślnej nazwy na 'Spotify Speaker'
     const name = this.config.name || 'Spotify Speaker';
     const uuid = this.api.hap.uuid.generate(this.config.deviceId || 'spotify-smart-speaker');
     const accessory = new this.api.platformAccessory(name, uuid);
@@ -48,11 +47,14 @@ class SpotifySmartSpeakerPlatform {
     // Główna usługa SmartSpeaker
     this.speakerService = accessory.addService(this.Service.SmartSpeaker, accessory.displayName);
 
-    // CurrentMediaState: Odczyt stanu (PLAY, PAUSE, STOP)
+    // Wymagane przez iOS do aktywacji sterowania
+    this.speakerService.setCharacteristic(this.Characteristic.ConfiguredName, accessory.displayName);
+
+    // CurrentMediaState: Odczyt stanu (PLAY / PAUSE)
     this.speakerService.getCharacteristic(this.Characteristic.CurrentMediaState)
       .onGet(() => this.currentMediaState);
 
-    // TargetMediaState: Sterowanie (Play / Pause z kafelka)
+    // TargetMediaState: Sterowanie odtwarzaniem
     this.speakerService.getCharacteristic(this.Characteristic.TargetMediaState)
       .onGet(() => this.targetMediaState)
       .onSet(async (value) => {
@@ -61,12 +63,9 @@ class SpotifySmartSpeakerPlatform {
           if (value === this.Characteristic.TargetMediaState.PLAY) {
             await this.client.play(this.config.deviceId);
             this.currentMediaState = this.Characteristic.CurrentMediaState.PLAY;
-          } else if (value === this.Characteristic.TargetMediaState.PAUSE) {
-            await this.client.pause(this.config.deviceId);
-            this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
           } else {
             await this.client.pause(this.config.deviceId);
-            this.currentMediaState = this.Characteristic.CurrentMediaState.STOP;
+            this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
           }
           
           this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
@@ -75,7 +74,7 @@ class SpotifySmartSpeakerPlatform {
         }
       });
 
-    // 3. Głośność (Volume)
+    // Głośność (Volume)
     this.speakerService.getCharacteristic(this.Characteristic.Volume)
       .onGet(() => this.currentVolume)
       .onSet(async (value) => {
@@ -84,6 +83,18 @@ class SpotifySmartSpeakerPlatform {
           this.currentVolume = value;
         } catch (err) {
           this.log.error('Volume adjustment error:', err.message);
+        }
+      });
+
+    // Wymagany Mute (odblokowuje szary kafel w Apple Home)
+    this.speakerService.getCharacteristic(this.Characteristic.Mute)
+      .onGet(() => false)
+      .onSet(async (muted) => {
+        try {
+          const targetVol = muted ? 0 : (this.currentVolume || 30);
+          await this.client.setVolume(targetVol, this.config.deviceId);
+        } catch (err) {
+          this.log.error('Mute toggle error:', err.message);
         }
       });
   }
@@ -95,10 +106,10 @@ class SpotifySmartSpeakerPlatform {
       try {
         const state = await this.client.getPlaybackState();
 
-        // 2. Obsługa braku sesji / zniknięcia Chromecast z listy Spotify Connect
+        // Brak aktywnego urządzenia w Spotify -> stan PAUSE (interfejs pozostaje aktywny)
         if (!state || !state.device || (this.config.deviceId && state.device.id !== this.config.deviceId)) {
-          this.currentMediaState = this.Characteristic.CurrentMediaState.STOP;
-          this.targetMediaState = this.Characteristic.TargetMediaState.PAUSE;
+          this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
+          this.targetMediaState = this.Characteristic.CurrentMediaState.PAUSE;
           
           this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
           this.speakerService.updateCharacteristic(this.Characteristic.TargetMediaState, this.targetMediaState);
