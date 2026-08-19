@@ -1,0 +1,16 @@
+{
+  "name": "homebridge-spotify-smart-speaker",
+  "version": "1.0.0",
+  "displayName": "Spotify Smart Speaker",
+  "main": "index.js",
+  "keywords": [
+    "homebridge-plugin"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "homebridge": ">=1.6.0"
+  },
+  "dependencies": {
+    "spotify-web-api-node": "^5.0.2"
+  }
+}
