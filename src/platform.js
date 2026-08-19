@@ -13,7 +13,7 @@ class SpotifySmartSpeakerPlatform {
     // Stany początkowe SmartSpeaker
     this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
     this.targetMediaState = this.Characteristic.TargetMediaState.PAUSE;
-    this.currentVolume = 30;
+    this.currentVolume = 50;
 
     this.api.on('didFinishLaunching', async () => {
       try {
