@@ -14,9 +14,8 @@ class SpotifyClient {
   }
 
   async initializeAuth() {
-    // Flow 1: Perform initial authorization code exchange
     if (this.config.authCode && !this.refreshToken) {
-      this.log.info('Exchanging authorization code for tokens...');
+      this.log.info('Exchanging authorization code for initial tokens...');
       const data = await this.api.authorizationCodeGrant(this.config.authCode);
       this.refreshToken = data.body['refresh_token'];
       this.api.setRefreshToken(this.refreshToken);
@@ -25,14 +24,13 @@ class SpotifyClient {
       return;
     }
 
-    // Flow 2: Use existing refresh token
     if (this.refreshToken) {
       this.api.setRefreshToken(this.refreshToken);
       await this.refreshTokens();
       return;
     }
 
-    throw new Error('Neither authCode nor refreshToken provided in config.');
+    throw new Error('Neither authCode nor refreshToken provided in configuration.');
   }
 
   async refreshTokens() {
@@ -54,9 +52,15 @@ class SpotifyClient {
     return this.api.pause({ device_id: deviceId });
   }
 
-  async getState() {
+  async setVolume(volume, deviceId) {
     await this.refreshTokens();
-    return this.api.getMyCurrentPlaybackState();
+    return this.api.setVolume(volume, { device_id: deviceId });
+  }
+
+  async getPlaybackState() {
+    await this.refreshTokens();
+    const response = await this.api.getMyCurrentPlaybackState();
+    return response.body || null;
   }
 }
 
