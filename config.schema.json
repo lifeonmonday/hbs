@@ -11,33 +11,53 @@
         "required": true
       },
       "clientId": {
-        "title": "Client ID",
+        "title": "Spotify Client ID",
         "type": "string",
-        "description": "Your Spotify Developer Application Client ID.",
         "required": true
       },
       "clientSecret": {
-        "title": "Client Secret",
+        "title": "Spotify Client Secret",
         "type": "string",
-        "description": "Your Spotify Developer Application Client Secret.",
         "required": true
       },
-      "authCode": {
-        "title": "Authorization Code",
+      "spotifyDeviceId": {
+        "title": "Default Spotify Device ID",
         "type": "string",
-        "description": "Paste the 'code' parameter from the Spotify callback URL for initial token setup."
-      },
-      "refreshToken": {
-        "title": "Refresh Token",
-        "type": "string",
-        "description": "Optional: Existing Refresh Token if already generated."
-      },
-      "deviceId": {
-        "title": "Spotify Device ID",
-        "type": "string",
-        "description": "Target Spotify Connect Device ID.",
+        "description": "Target Spotify Connect device ID (e.g., Cast group)",
         "required": true
+      },
+      "sinricAppKey": {
+        "title": "Sinric Pro App Key",
+        "type": "string",
+        "description": "Optional: App Key from Sinric Pro dashboard for wake routine fallback"
+      },
+      "sinricAppSecret": {
+        "title": "Sinric Pro App Secret",
+        "type": "string",
+        "description": "Optional: App Secret from Sinric Pro dashboard"
+      },
+      "sinricDeviceId": {
+        "title": "Sinric Pro Virtual Switch Device ID",
+        "type": "string",
+        "description": "Optional: Virtual switch device ID linked to Google Home Routine"
       }
     }
-  }
+  },
+  "layout": [
+    "name",
+    "clientId",
+    "clientSecret",
+    "spotifyDeviceId",
+    {
+      "type": "fieldset",
+      "title": "Google Cast Wake Settings (Sinric Pro Fallback)",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        "sinricAppKey",
+        "sinricAppSecret",
+        "sinricDeviceId"
+      ]
+    }
+  ]
 }
