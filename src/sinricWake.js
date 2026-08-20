@@ -1,5 +1,5 @@
 const SinricPro = require('sinricpro').default || require('sinricpro');
-const { SinricProSwitch } = require('sinricpro/devices');
+const { SinricProSwitch } = SinricPro;
 
 class SinricWakeManager {
   constructor() {
