@@ -25,7 +25,7 @@ class SpotifyLightbulbPlatform {
   }
 
   registerAccessory() {
-    const name = (this.config.name || 'Spotify Speaker') + ' Light';
+    const name = (this.config.name || 'Spotify Lightbulb Speaker') + ' Light';
     const uuid = this.api.hap.uuid.generate((this.config.deviceId || 'spotify-speaker') + '-light-test');
     const accessory = new this.api.platformAccessory(name, uuid);
 
@@ -94,7 +94,8 @@ class SpotifyLightbulbPlatform {
       });
 
     this.startPolling();
-    this.api.publishExternalAccessories('homebridge-spotify-smart-speaker', [accessory]);
+    // instead of publishExternal so lightbulb can be just a bridged accessory.
+    this.api.registerPlatformAccessories('homebridge-spotify-smart-speaker', [accessory]);
   }
 
   startPolling() {
