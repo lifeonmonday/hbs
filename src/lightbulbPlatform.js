@@ -37,31 +37,57 @@ class SpotifyLightbulbPlatform {
     this.service = accessory.addService(this.Service.Lightbulb, accessory.displayName);
 
     this.service.getCharacteristic(this.Characteristic.On)
-      .onGet(() => this.isPlaying)
-      .onSet(async (value) => {
-        try {
-          if (value) {
-            await this.client.play(this.config.deviceId);
-            this.isPlaying = true;
-          } else {
-            await this.client.pause(this.config.deviceId);
-            this.isPlaying = false;
-          }
-        } catch (err) {
-          this.log.error('Błąd odtwarzania Lightbulb:', err.message);
-        }
-      });
+  .onGet(() => this.isPlaying)
+  .onSet(async (value) => {
+    if (value) {
+      try {
+        // 1. Try playing/resuming directly (fast path)
+        await this.client.play(this.config.deviceId);
+        this.isPlaying = true;
+      } catch (err) {
+        this.log.warn('Direct play failed (Nest speaker likely idle). Attempting wake-up trigger...');
 
-    this.service.getCharacteristic(this.Characteristic.Brightness)
-      .onGet(() => this.currentVolume)
-      .onSet(async (value) => {
         try {
-          await this.client.setVolume(value, this.config.deviceId);
-          this.currentVolume = value;
-        } catch (err) {
-          this.log.error('Błąd głośności Lightbulb:', err.message);
+          // 2. Fire wake-up switch & wait 2s for Google/SmartThings to establish session
+          await this.triggerClient.triggerWakeupSwitch();
+
+          // 3. Retry Spotify playback
+          await this.client.play(this.config.deviceId);
+          this.isPlaying = true;
+        } catch (retryErr) {
+          this.log.error('Playback failed even after wake-up trigger:', retryErr.message);
+          
+          // Revert HomeKit UI state back to OFF if it fails completely
+          this.isPlaying = false;
+          setTimeout(() => {
+            this.service.updateCharacteristic(this.Characteristic.On, false);
+          }, 500);
         }
-      });
+      }
+    } else {
+      try {
+        await this.client.pause(this.config.deviceId);
+        this.isPlaying = false;
+      } catch (err) {
+        this.log.error('Błąd pauzowania Lightbulb:', err.message);
+      }
+    }
+  });
+    
+    this.service.getCharacteristic(this.Characteristic.Brightness)
+  .setProps({
+    minValue: 0,
+    maxValue: 80,
+    minStep: 5 
+  .onGet(() => this.currentVolume)
+  .onSet(async (value) => {
+    try {
+      await this.client.setVolume(value, this.config.deviceId);
+      this.currentVolume = value;
+    } catch (err) {
+      this.log.error('Błąd głośności Lightbulb:', err.message);
+    }
+  });
 
     this.startPolling();
     this.api.publishExternalAccessories('homebridge-spotify-smart-speaker', [accessory]);
