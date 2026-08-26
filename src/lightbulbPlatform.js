@@ -94,8 +94,7 @@ class SpotifyLightbulbPlatform {
       });
 
     this.startPolling();
-    // instead of publishExternal so lightbulb can be just a bridged accessory.
-    this.api.registerPlatformAccessories('homebridge-spotify-smart-speaker', [accessory]);
+    this.api.publishExternalAccessories('homebridge-spotify-smart-speaker', [accessory]);
   }
 
   startPolling() {
