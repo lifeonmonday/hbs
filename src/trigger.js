@@ -1,16 +1,18 @@
+const fetch = require('node-fetch');
+
 class TriggerClient {
   constructor(config, log) {
     this.log = log;
-    this.homebridgeUrl = config.homebridgeUrl || 'http://homebridge:8581';
-    this.username = config.homebridgeUsername;
+    this.homebridgeUrl = config.homebridgeUrl || 'http://127.0.0.1:8581';
+    this.username = config.homebridgeUsername || 'admin';
     this.password = config.homebridgePassword;
-    this.switchUuid = config.triggerSwitchUuid;
+    this.switchUuid = config.triggerSwitchUuid || config.triggerUniqueId;
     
-    // Store token in memory to reuse across calls
+    // Cache tokena w pamięci
     this.cachedToken = null;
   }
 
-  // 1. Get token dynamically via /api/auth/login
+  // 1. Pobieranie tokena z /api/auth/login
   async getAuthToken() {
     if (this.cachedToken) {
       return this.cachedToken;
@@ -32,11 +34,11 @@ class TriggerClient {
     }
 
     const data = await response.json();
-    this.cachedToken = data.access_token; // Cache it in memory
+    this.cachedToken = data.access_token;
     return this.cachedToken;
   }
 
-  // 2. Execute trigger with automatic token handling
+  // 2. Wykonanie triggera z ponowieniem przy 401
   async triggerWakeupSwitch() {
     if (!this.username || !this.password || !this.switchUuid) {
       this.log.warn('Trigger skipped: username, password, or triggerSwitchUuid missing in config.');
@@ -44,10 +46,10 @@ class TriggerClient {
     }
 
     try {
-      this.log.info('Waking up Nest speaker via trigger switch...');
+      this.log.info('Waking up device via trigger switch...');
       
       let token = await this.getAuthToken();
-      let url = `${this.homebridgeUrl}/api/accessories/${this.switchUuid}`;
+      let url = `${this.homebridgeUrl}/api/accessories/${encodeURIComponent(this.switchUuid)}`;
 
       let response = await fetch(url, {
         method: 'PUT',
@@ -61,11 +63,11 @@ class TriggerClient {
         })
       });
 
-      // If token expired (401 Unauthorized), refresh token and retry ONCE
+      // Wygaśnięty token (401 Unauthorized) -> wyczyszczenie i jedna ponowna próba
       if (response.status === 401) {
         this.log.info('Token expired, renewing authentication...');
-        this.cachedToken = null; // Clear cache
-        token = await this.getAuthToken(); // Fetch new token
+        this.cachedToken = null;
+        token = await this.getAuthToken();
 
         response = await fetch(url, {
           method: 'PUT',
@@ -81,10 +83,13 @@ class TriggerClient {
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
-      // Wait 2 seconds for Nest session to activate
+      this.log.info('Wake-up trigger switch successfully turned ON.');
+
+      // Czas na wybudzenie sesji Spotify / głośnika
       await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (err) {
       this.log.error('Failed to execute wake-up trigger:', err.message);
