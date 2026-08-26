@@ -1,6 +1,6 @@
 {
   "name": "homebridge-spotify-smart-speaker",
-  "version": "1.0.0",
+  "version": "1.0.0-beta.2",
   "displayName": "Spotify Smart Speaker",
   "main": "index.js",
   "keywords": [
