@@ -1,6 +1,7 @@
 const SpotifySmartSpeakerPlatform = require('./src/platform');
 const SpotifyTVPlatform = require('./src/tvPlatform');
 const SpotifyLightbulbPlatform = require('./src/lightbulbPlatform');
+const SpotifyFanPlatform = require('./src/fanPlatform');
 
 module.exports = (api) => {
   // Original Smart Speaker
