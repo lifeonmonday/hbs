@@ -80,8 +80,8 @@ class SpotifyLightbulbPlatform {
     this.service.getCharacteristic(this.Characteristic.Brightness)
       .setProps({
         minValue: 0,
-        maxValue: 60,
-        minStep: 10
+        maxValue: 100,
+        minStep: 5
       }) 
       .onGet(() => this.currentVolume)
       .onSet(async (value) => {
