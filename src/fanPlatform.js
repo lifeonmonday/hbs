@@ -81,8 +81,8 @@ class SpotifyFanPlatform {
     this.service.getCharacteristic(this.Characteristic.RotationSpeed)
       .setProps({
         minValue: 0,
-        maxValue: 80,
-        minStep: 5
+        maxValue: 65,
+        minStep: 15
       }) 
       .onGet(() => this.currentVolume)
       .onSet(async (value) => {
