@@ -1,5 +1,3 @@
-const fetch = require('node-fetch');
-
 class TriggerClient {
   constructor(config, log) {
     this.log = log;
