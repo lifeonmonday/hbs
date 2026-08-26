@@ -43,18 +43,15 @@ class SpotifyLightbulbPlatform {
       .onSet(async (value) => {
         if (value) {
           try {
-            // 1. Próba bezpośredniego odtworzenia (szybka ścieżka)
+            // Start Playback via Spotify API
             await this.client.play(this.config.deviceId);
             this.isPlaying = true;
           } catch (err) {
             this.log.warn('Direct play failed (Nest speaker likely idle). Attempting wake-up trigger...');
 
             try {
-              // 2. Wyzwolenie przełącznika budzącego
+              // Trigger Cast Playback
               await this.triggerClient.triggerWakeupSwitch();
-
-              // 3. Ponowna próba po obudzeniu
-              await this.client.play(this.config.deviceId);
               this.isPlaying = true;
             } catch (retryErr) {
               this.log.error('Playback failed even after wake-up trigger:', retryErr.message);
