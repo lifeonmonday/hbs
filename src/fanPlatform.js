@@ -14,6 +14,9 @@ class SpotifyFanPlatform {
     this.isPlaying = false;
     this.currentVolume = 30;
 
+    // Pobranie limitu z configu lub domyślnie 65%
+    this.maxVolumeLimit = this.config.maxVolume || 65; 
+
     this.api.on('didFinishLaunching', async () => {
       try {
         await this.client.initializeAuth();
@@ -42,25 +45,19 @@ class SpotifyFanPlatform {
       .onGet(() => (this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE))
       .onSet(async (value) => {
         const isActive = value === this.Characteristic.Active.ACTIVE;
+        
         if (isActive) {
           try {
-            // 1. Próba bezpośredniego odtworzenia (szybka ścieżka)
             await this.client.play(this.config.deviceId);
             this.isPlaying = true;
           } catch (err) {
-            this.log.warn('Direct play failed (Nest speaker likely idle). Attempting wake-up trigger...');
-
+            this.log.warn('Direct play failed. Attempting wake-up trigger...');
             try {
-              // 2. Wyzwolenie przełącznika budzącego
               await this.triggerClient.triggerWakeupSwitch();
-
-              // 3. Ponowna próba po obudzeniu
               await this.client.play(this.config.deviceId);
               this.isPlaying = true;
             } catch (retryErr) {
-              this.log.error('Playback failed even after wake-up trigger:', retryErr.message);
-
-              // Cofnięcie stanu przełącznika w Apple Home w razie porażki
+              this.log.error('Playback failed after trigger:', retryErr.message);
               this.isPlaying = false;
               setTimeout(() => {
                 this.service.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.INACTIVE);
@@ -77,18 +74,21 @@ class SpotifyFanPlatform {
         }
       });
 
-    // ROTATION SPEED CHARACTERISTIC (Głośność z krokami pod kreski)
+    // ROTATION SPEED CHARACTERISTIC (Głośność ze stałym zakresem 0-100)
     this.service.getCharacteristic(this.Characteristic.RotationSpeed)
       .setProps({
         minValue: 0,
-        maxValue: 65,
-        minStep: 15
+        maxValue: 100, // ZAWSZE 100!
+        minStep: 20    // Dokładnie 5 kroków (20, 40, 60, 80, 100) pod kreski w iOS
       }) 
       .onGet(() => this.currentVolume)
       .onSet(async (value) => {
+        // Obcinanie wartości do ustalonego limitu w kodzie
+        const targetVolume = Math.min(value, this.maxVolumeLimit);
+
         try {
-          await this.client.setVolume(value, this.config.deviceId);
-          this.currentVolume = value;
+          await this.client.setVolume(targetVolume, this.config.deviceId);
+          this.currentVolume = targetVolume;
         } catch (err) {
           this.log.error('Błąd głośności Fan:', err.message);
         }
