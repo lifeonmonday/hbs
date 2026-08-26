@@ -29,7 +29,7 @@ class SpotifyTVPlatform {
     const uuid = this.api.hap.uuid.generate((this.config.deviceId || 'spotify-speaker') + '-avr-test');
     const accessory = new this.api.platformAccessory(name, uuid);
 
-    accessory.category = this.api.hap.Categories.TELEVISION;
+    accessory.category = this.api.hap.Categories.AUDIO_RECEIVER;
 
     accessory.getService(this.Service.AccessoryInformation)
       .setCharacteristic(this.Characteristic.Manufacturer, 'Spotify')
@@ -117,9 +117,11 @@ class SpotifyTVPlatform {
 
   setupVolumeInputSources(accessory) {
     const levels = [
-      { id: 1, name: 'Głośność 15%', vol: 15 },
-      { id: 2, name: 'Głośność 30%', vol: 30 },
-      { id: 3, name: 'Głośność 40%', vol: 40 }
+      { id: 1, name: 'Volume 10%', vol: 10 },
+      { id: 2, name: 'Volume 15%', vol: 15 },
+      { id: 3, name: 'Volume 20%', vol: 20 },
+      { id: 4, name: 'Volume 30%', vol: 30 },
+      { id: 5, name: 'Volume 40%', vol: 40 }
     ];
 
     levels.forEach((level) => {
@@ -162,9 +164,11 @@ class SpotifyTVPlatform {
   }
 
   getActiveInputIdentifier(vol) {
-    if (vol <= 20) return 1; // 15%
-    if (vol <= 35) return 2; // 30%
-    return 3;                // 40%
+    if (vol <= 12) return 1; // 10%
+    if (vol <= 17) return 2; // 15%
+    if (vol <= 25) return 3; // 20%
+    if (vol <= 35) return 4; // 30%
+    return 5;                // 40%
   }
 
   syncActiveInputWithVolume(vol) {
