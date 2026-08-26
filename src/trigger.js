@@ -2,15 +2,13 @@ class TriggerClient {
   constructor(config, log) {
     this.log = log;
     this.homebridgeUrl = config.homebridgeUrl || 'http://127.0.0.1:8581';
-    this.username = config.homebridgeUsername || 'admin';
+    this.username = config.homebridgeUsername;
     this.password = config.homebridgePassword;
-    this.switchUuid = config.triggerSwitchUuid || config.triggerUniqueId;
+    this.switchUuid = config.triggerSwitchUuid;
     
-    // Cache tokena w pamięci
     this.cachedToken = null;
   }
 
-  // 1. Pobieranie tokena z /api/auth/login
   async getAuthToken() {
     if (this.cachedToken) {
       return this.cachedToken;
@@ -36,7 +34,6 @@ class TriggerClient {
     return this.cachedToken;
   }
 
-  // 2. Wykonanie triggera z ponowieniem przy 401
   async triggerWakeupSwitch() {
     if (!this.username || !this.password || !this.switchUuid) {
       this.log.warn('Trigger skipped: username, password, or triggerSwitchUuid missing in config.');
@@ -61,7 +58,6 @@ class TriggerClient {
         })
       });
 
-      // Wygaśnięty token (401 Unauthorized) -> wyczyszczenie i jedna ponowna próba
       if (response.status === 401) {
         this.log.info('Token expired, renewing authentication...');
         this.cachedToken = null;
@@ -86,9 +82,6 @@ class TriggerClient {
       }
 
       this.log.info('Wake-up trigger switch successfully turned ON.');
-
-      // Czas na wybudzenie sesji Spotify / głośnika
-      await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (err) {
       this.log.error('Failed to execute wake-up trigger:', err.message);
     }
