@@ -29,7 +29,7 @@ class SpotifyTVPlatform {
     const uuid = this.api.hap.uuid.generate((this.config.deviceId || 'spotify-speaker') + '-avr-test');
     const accessory = new this.api.platformAccessory(name, uuid);
 
-    accessory.category = this.api.hap.Categories.AUDIO_RECEIVER;
+    accessory.category = this.api.hap.Categories.TELEVISION;
 
     accessory.getService(this.Service.AccessoryInformation)
       .setCharacteristic(this.Characteristic.Manufacturer, 'Spotify')
