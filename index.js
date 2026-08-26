@@ -11,4 +11,7 @@ module.exports = (api) => {
 
   // Test Lightbulb Device (Tile Tap & Volume Slider)
   api.registerPlatform('homebridge-spotify-smart-speaker', 'SpotifyLightbulbPlatform', SpotifyLightbulbPlatform);
+  
+  // Test Fan Device (Tile Tap & Volume Slider)
+  api.registerPlatform('SpotifyFanPlatform', SpotifyFanPlatform);
 };
