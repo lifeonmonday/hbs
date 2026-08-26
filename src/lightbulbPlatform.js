@@ -10,7 +10,7 @@ class SpotifyLightbulbPlatform {
     this.Characteristic = api.hap.Characteristic;
 
     this.client = new SpotifyClient(config, log);
-    this.triggerClient = new TriggerClient(config, log); 
+    this.triggerClient = new TriggerClient(config, log, this); 
     this.isPlaying = false;
     this.currentVolume = 30;
 
