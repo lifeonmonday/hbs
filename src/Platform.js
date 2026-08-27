@@ -1,8 +1,6 @@
 const SpotifyClient = require('./spotify');
 const SmartSpeakerAccessory = require('./accessories/SmartSpeaker');
-const TVAccessory = require('./accessories/TV');
-const LightbulbAccessory = require('./accessories/Lightbulb');
-const FanAccessory = require('./accessories/Fan');
+const AudioReceiverAccessory = require('./accessories/AudioReceiver');
 
 /**
  * Main Spotify Platform for Homebridge
@@ -18,9 +16,7 @@ class SpotifyPlatform {
     // Map accessory types to their implementation classes
     this.accessoryClasses = {
       'SmartSpeaker': SmartSpeakerAccessory,
-      'TV': TVAccessory,
-      'Lightbulb': LightbulbAccessory,
-      'Fan': FanAccessory
+      'AudioReceiver': AudioReceiverAccessory
     };
 
     this.api.on('didFinishLaunching', async () => this.initialize());

@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "SpotifySmartSpeaker",
+  "pluginAlias": "SpotifyHBS",
   "pluginNodePackage": "homebridge-hbs",
   "schema": {
     "type": "object",
@@ -13,9 +13,9 @@
       "accessoryType": {
         "title": "Accessory Type",
         "type": "string",
-        "enum": ["SmartSpeaker", "TV", "Lightbulb", "Fan"],
+        "enum": ["SmartSpeaker", "AudioReceiver"],
         "default": "SmartSpeaker",
-        "description": "Choose which HomeKit accessory type to use for this instance. Create multiple configs with different types to have multiple accessories.",
+        "description": "SmartSpeaker: basic play/pause and volume. AudioReceiver: TV-style with track info display.",
         "required": true
       },
       "clientId": {
@@ -55,33 +55,25 @@
         "description": "How often to check Spotify playback state (in seconds)."
       },
       "homebridgeUrl": {
-        "title": "Homebridge URL (for Trigger)",
+        "title": "Homebridge URL (for Wake-up Trigger)",
         "type": "string",
         "default": "http://127.0.0.1:8581",
         "description": "URL to your Homebridge instance (optional, for wake-up trigger)."
       },
       "homebridgeUsername": {
-        "title": "Homebridge Username (for Trigger)",
+        "title": "Homebridge Username (for Wake-up Trigger)",
         "type": "string",
         "description": "Optional: Username for Homebridge auth (needed for wake-up trigger)."
       },
       "homebridgePassword": {
-        "title": "Homebridge Password (for Trigger)",
+        "title": "Homebridge Password (for Wake-up Trigger)",
         "type": "string",
         "description": "Optional: Password for Homebridge auth (needed for wake-up trigger)."
       },
       "triggerSwitchUuid": {
-        "title": "Trigger Switch UUID (for Trigger)",
+        "title": "Trigger Switch UUID (for Wake-up)",
         "type": "string",
         "description": "Optional: UUID of a switch accessory to trigger for wake-up."
-      },
-      "maxVolume": {
-        "title": "Max Volume (for Fan)",
-        "type": "number",
-        "default": 65,
-        "minimum": 1,
-        "maximum": 100,
-        "description": "Maximum volume limit when using Fan accessory (optional)."
       }
     }
   }
