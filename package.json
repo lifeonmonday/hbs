@@ -2,7 +2,7 @@
   "name": "homebridge-hbs",
   "version": "2.0.0-dev.1",
   "displayName": "Homebridge Spotify",
-  "description": "Homebridge plugin to expose Spotify as a HomeKit accessory (Smart Speaker, TV, Lightbulb, or Fan)",
+  "description": "Homebridge plugin to expose Spotify as a HomeKit accessory (Smart Speaker or Audio Receiver)",
   "main": "index.js",
   "keywords": [
     "homebridge-plugin"
@@ -10,6 +10,15 @@
   "engines": {
     "node": ">=18.0.0",
     "homebridge": ">=1.6.0"
+  },
+  "homebridge": {
+    "platforms": [
+      {
+        "name": "SpotifyHBS",
+        "alias": "Spotify HBS",
+        "platform": "SpotifyHBS"
+      }
+    ]
   },
   "dependencies": {
     "spotify-web-api-node": "^5.0.2"
