@@ -15,20 +15,32 @@ class SpotifyTvPlatform {
     this.currentVolume = 30;
     this.currentTrack = '';
 
-    // INICJALIZACJA KLIENTÓW
+    // Inicjalizacja klientów API i budzika
     this.client = new SpotifyClient(this.config, this.log);
     this.triggerClient = new TriggerClient(this.config, this.log, this);
 
-    // Rejestracja akcesorium AVR
+    // Budowanie akcesorium AVR
     this.accessory = this.setupAccessory();
 
-    // Start pętli odpytującej w tle
+    // PUBLIKACJA AKCESORIUM ZEWNĘTRZNEGO (Wymagane przez HomeKit dla TV/AVR)
+    this.api.publishExternalAccessories('homebridge-spotify-tv', [this.accessory]);
+
+    // Start odpytywania w tle
     this.startPolling();
   }
 
   setupAccessory() {
     const uuid = this.api.hap.uuid.generate(`spotify-tv-${this.config.deviceId || 'default'}`);
-    const accessory = new this.api.hap.Accessory(`${this.baseName} AVR`, uuid);
+    
+    // Tworzymy akcesorium (typ 34 = TARGET_CATEGORY_AUDIO_RECEIVER / AVR)
+    const accessory = new this.api.platformAccessory(`${this.baseName} AVR`, uuid, 34);
+
+    // Informacje o akcesorium (Wymagane dla External Accessories)
+    const accessoryInfo = accessory.getService(this.Service.AccessoryInformation);
+    accessoryInfo
+      .setCharacteristic(this.Characteristic.Manufacturer, 'Spotify')
+      .setCharacteristic(this.Characteristic.Model, 'Connect AVR')
+      .setCharacteristic(this.Characteristic.SerialNumber, this.config.deviceId || '12345678');
 
     // 1. GŁÓWNA USŁUGA TELEVISION (AVR)
     this.tvService = accessory.addService(this.Service.Television, `${this.baseName} AVR`, 'tv_main');
@@ -38,7 +50,7 @@ class SpotifyTvPlatform {
       this.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE
     );
 
-    // Ochrona nazwy: Ustawiamy tylko raz, jeśli pusta. Nie nadpisujemy zmienionej nazwy w iOS.
+    // ConfiguredName ustawiamy tylko raz (nie nadpisuje nazwy wybranej przez użytkownika na iPhonie)
     if (!this.tvService.getCharacteristic(this.Characteristic.ConfiguredName).value) {
       this.tvService.setCharacteristic(this.Characteristic.ConfiguredName, `${this.baseName} AVR`);
     }
@@ -63,7 +75,7 @@ class SpotifyTvPlatform {
               this.log.error('Playback failed after wake-up:', retryErr.message);
               this.isPlaying = false;
               
-              // Self-healing: cofnięcie kafelka w Apple Home po porażce
+              // Cofnięcie stanu kafelka (Self-Healing UI)
               setTimeout(() => {
                 this.tvService.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.INACTIVE);
               }, 500);
@@ -102,7 +114,7 @@ class SpotifyTvPlatform {
 
     // 3. INPUT SOURCES (Wyświetlacz Utworu + Progi Głośności)
 
-    // ID: 0 -> Wyświetlanie aktualnego utworu
+    // ID: 0 -> Dynamiczne wyświetlanie utworu
     this.trackInputService = accessory.addService(this.Service.InputSource, 'track_display', 'Track Display');
     this.trackInputService
       .setCharacteristic(this.Characteristic.Identifier, 0)
@@ -112,7 +124,7 @@ class SpotifyTvPlatform {
 
     this.tvService.addLinkedService(this.trackInputService);
 
-    // ID: 1..4 -> Szybkie progi głośności
+    // ID: 1..4 -> Szybkie progi głośności na liście
     const volumePresets = [
       { id: 1, name: 'Głośność: 15%', level: 15 },
       { id: 2, name: 'Głośność: 30%', level: 30 },
@@ -131,7 +143,7 @@ class SpotifyTvPlatform {
       this.tvService.addLinkedService(inputService);
     });
 
-    // Reakcja na wybór z listy wejść
+    // Reakcja na kliknięcie na liście
     this.tvService.getCharacteristic(this.Characteristic.ActiveIdentifier)
       .onSet(async (value) => {
         const selected = volumePresets.find(p => p.id === value);
@@ -146,7 +158,7 @@ class SpotifyTvPlatform {
           }
         }
 
-        // Zawsze przywracamy zaznaczenie na pozycję utworu (ID: 0)
+        // Przywracamy wskaźnik zaznaczenia na nagłówek z piosenką (ID: 0)
         setTimeout(() => {
           this.tvService.updateCharacteristic(this.Characteristic.ActiveIdentifier, 0);
         }, 300);
@@ -169,19 +181,19 @@ class SpotifyTvPlatform {
           return;
         }
 
-        // 1. Stan odtwarzania
+        // 1. Stan Play / Pause
         this.isPlaying = state.is_playing;
         this.tvService.updateCharacteristic(
           this.Characteristic.Active,
           this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE
         );
 
-        // 2. Głośność
+        // 2. Pobranie głośności
         if (state.device.volume_percent !== null) {
           this.currentVolume = state.device.volume_percent;
         }
 
-        // 3. Tytuł utworu w InputSource (ID: 0)
+        // 3. Wstawienie utworu w InputSource
         if (state.item) {
           const trackText = `${state.item.name} · ${state.item.artists[0].name}`;
           
@@ -193,11 +205,11 @@ class SpotifyTvPlatform {
           this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Nie odtwarzana');
         }
 
-        // Upewniamy się, że wskaźnik na liście wskazuje na utwór
+        // Upewniamy się, że zaznaczenie w interfejsie wskazuje na utwór (ID: 0)
         this.tvService.updateCharacteristic(this.Characteristic.ActiveIdentifier, 0);
 
       } catch (err) {
-        // Ignorujemy okazjonalne błędy sieci w tle
+        // Cichy przechwytywacz błędów w tle
       }
     }, interval);
   }
