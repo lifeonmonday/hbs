@@ -1,5 +1,5 @@
 const SpotifyPlatform = require('./src/Platform');
 
 module.exports = (api) => {
-  api.registerPlatform('homebridge-hbs', 'SpotifySmartSpeaker', SpotifyPlatform);
+  api.registerPlatform('homebridge-hbs', 'SpotifyHBS', SpotifyPlatform);
 };
