@@ -125,7 +125,7 @@ class AudioReceiverAccessory {
     this.trackInputService = accessory.addService(this.Service.InputSource, 'track_display', 'Track Display');
     this.trackInputService
       .setCharacteristic(this.Characteristic.Identifier, 0)
-      .setCharacteristic(this.Characteristic.ConfiguredName, 'No playback')
+      .setCharacteristic(this.Characteristic.ConfiguredName, 'Not Playing')
       .setCharacteristic(this.Characteristic.IsConfigured, this.Characteristic.IsConfigured.CONFIGURED)
       .setCharacteristic(this.Characteristic.InputSourceType, this.Characteristic.InputSourceType.APPLICATION);
 
@@ -147,7 +147,10 @@ class AudioReceiverAccessory {
         if (!state || !state.device || (this.config.deviceId && state.device.id !== this.config.deviceId)) {
           this.isPlaying = false;
           this.tvService.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.INACTIVE);
-          this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'No playback');
+          if (this.currentTrack !== 'Not Playing') {
+            this.currentTrack = 'Not Playing';
+            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Not Playing');
+          }
           return;
         }
 
@@ -164,7 +167,7 @@ class AudioReceiverAccessory {
         }
 
         // Update track display in input source with all artists
-        if (state.item && state.item.artists && state.item.artists.length > 0) {
+        if (state.is_playing && state.item && state.item.artists && state.item.artists.length > 0) {
           const artistNames = state.item.artists.map((a) => a.name).join(', ');
           const trackText = `${state.item.name} · ${artistNames}`;
           if (this.currentTrack !== trackText) {
@@ -172,7 +175,10 @@ class AudioReceiverAccessory {
             this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, trackText);
           }
         } else {
-          this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Not playing');
+          if (this.currentTrack !== 'Not Playing') {
+            this.currentTrack = 'Not Playing';
+            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Not Playing');
+          }
         }
 
         this.tvService.updateCharacteristic(this.Characteristic.ActiveIdentifier, 0);
