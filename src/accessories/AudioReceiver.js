@@ -63,6 +63,7 @@ class AudioReceiverAccessory {
         const shouldPlay = value === this.Characteristic.Active.ACTIVE;
 
         if (shouldPlay) {
+          this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Starting...');
           try {
             await this.spotifyClient.play(this.config.deviceId);
             this.isPlaying = true;
@@ -123,7 +124,7 @@ class AudioReceiverAccessory {
     this.trackInputService
       .setCharacteristic(this.Characteristic.Identifier, 0)
       .setCharacteristic(this.Characteristic.ConfiguredName, 'Spotify')
-      .setCharacteristic(this.Characteristic.IsConfigured, this.Characteristic.IsConfigured.CONFIGURED)
+    //  .setCharacteristic(this.Characteristic.IsConfigured, this.Characteristic.IsConfigured.CONFIGURED)
       .setCharacteristic(this.Characteristic.InputSourceType, this.Characteristic.InputSourceType.APPLICATION);
 
     this.tvService.addLinkedService(this.trackInputService);
