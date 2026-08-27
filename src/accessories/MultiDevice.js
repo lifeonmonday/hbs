@@ -39,7 +39,7 @@ class MultiDeviceAccessory {
     this.tvService = accessory.addService(this.Service.Television, this.displayName, 'avr_main');
     this.tvService.setCharacteristic(this.Characteristic.SleepDiscoveryMode, this.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE);
     this.tvService.setCharacteristic(this.Characteristic.ConfiguredName, this.displayName);
-
+    this.tvService.setCharacteristic(this.Characteristic.ActiveIdentifier, 0);
     // Play/Pause Logic
     this.tvService.getCharacteristic(this.Characteristic.Active)
       .onGet(() => (this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE))
@@ -62,9 +62,23 @@ class MultiDeviceAccessory {
 
     // 3. Lightbulb (The Visible Slider)
     this.lightbulbService = accessory.addService(this.Service.Lightbulb, 'Volume Slider', 'vol_slider');
+
+    // Add 'On' characteristic and force it to 'true' so the slider is always accessible
+    this.lightbulbService.getCharacteristic(this.Characteristic.On)
+      .onGet(() => false)
+      .onSet(async (val) => {
+        // Optional: If you click the slider "off", do nothing or pause playback
+        if (!val) await this.spotifyClient.pause(this.config.deviceId);
+      });
+
     this.lightbulbService.getCharacteristic(this.Characteristic.Brightness)
+      .setProps({ minValue: 0, maxValue: 100, minStep: 5 })
       .onGet(() => this.currentVolume)
-      .onSet(async (val) => { await this.spotifyClient.setVolume(val, this.config.deviceId); this.currentVolume = val; });
+      .onSet(async (val) => {
+        await this.spotifyClient.setVolume(val, this.config.deviceId);
+        this.currentVolume = val;
+      });
+
 
     // 4. Input Source
     this.trackInputService = accessory.addService(this.Service.InputSource, 'track_display', 'Track Display');
