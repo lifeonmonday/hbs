@@ -1,7 +1,8 @@
 {
-  "name": "homebridge-spotify-smart-speaker",
-  "version": "1.0.0-beta.2",
-  "displayName": "Spotify Smart Speaker",
+  "name": "homebridge-hbs",
+  "version": "2.0.0-dev.1",
+  "displayName": "Homebridge Spotify",
+  "description": "Homebridge plugin to expose Spotify as a HomeKit accessory (Smart Speaker, TV, Lightbulb, or Fan)",
   "main": "index.js",
   "keywords": [
     "homebridge-plugin"

@@ -1,13 +1,21 @@
 {
   "pluginAlias": "SpotifySmartSpeaker",
-  "pluginNodePackage": "homebridge-spotify-smart-speaker",
+  "pluginNodePackage": "homebridge-hbs",
   "schema": {
     "type": "object",
     "properties": {
       "name": {
         "title": "Accessory Name",
         "type": "string",
-        "default": "Spotify Speaker",
+        "default": "Spotify",
+        "required": true
+      },
+      "accessoryType": {
+        "title": "Accessory Type",
+        "type": "string",
+        "enum": ["SmartSpeaker", "TV", "Lightbulb", "Fan"],
+        "default": "SmartSpeaker",
+        "description": "Choose which HomeKit accessory type to use for this instance. Create multiple configs with different types to have multiple accessories.",
         "required": true
       },
       "clientId": {
@@ -37,6 +45,43 @@
         "type": "string",
         "description": "Target Spotify Connect Device ID.",
         "required": true
+      },
+      "pollInterval": {
+        "title": "Poll Interval (seconds)",
+        "type": "number",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 60,
+        "description": "How often to check Spotify playback state (in seconds)."
+      },
+      "homebridgeUrl": {
+        "title": "Homebridge URL (for Trigger)",
+        "type": "string",
+        "default": "http://127.0.0.1:8581",
+        "description": "URL to your Homebridge instance (optional, for wake-up trigger)."
+      },
+      "homebridgeUsername": {
+        "title": "Homebridge Username (for Trigger)",
+        "type": "string",
+        "description": "Optional: Username for Homebridge auth (needed for wake-up trigger)."
+      },
+      "homebridgePassword": {
+        "title": "Homebridge Password (for Trigger)",
+        "type": "string",
+        "description": "Optional: Password for Homebridge auth (needed for wake-up trigger)."
+      },
+      "triggerSwitchUuid": {
+        "title": "Trigger Switch UUID (for Trigger)",
+        "type": "string",
+        "description": "Optional: UUID of a switch accessory to trigger for wake-up."
+      },
+      "maxVolume": {
+        "title": "Max Volume (for Fan)",
+        "type": "number",
+        "default": 65,
+        "minimum": 1,
+        "maximum": 100,
+        "description": "Maximum volume limit when using Fan accessory (optional)."
       }
     }
   }

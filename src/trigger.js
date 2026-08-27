@@ -1,3 +1,7 @@
+/**
+ * Homebridge Trigger Client
+ * Used to wake up devices via trigger switches
+ */
 class TriggerClient {
   constructor(config, log) {
     this.log = log;
@@ -5,10 +9,12 @@ class TriggerClient {
     this.username = config.homebridgeUsername;
     this.password = config.homebridgePassword;
     this.switchUuid = config.triggerSwitchUuid;
-    
     this.cachedToken = null;
   }
 
+  /**
+   * Get or refresh authentication token from Homebridge
+   */
   async getAuthToken() {
     if (this.cachedToken) {
       return this.cachedToken;
@@ -16,24 +22,49 @@ class TriggerClient {
 
     const loginUrl = `${this.homebridgeUrl}/api/auth/login`;
 
-    const response = await fetch(loginUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: this.username,
-        password: this.password
-      })
-    });
+    try {
+      const response = await fetch(loginUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: this.username,
+          password: this.password
+        })
+      });
 
-    if (!response.ok) {
-      throw new Error(`Auth failed with status ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Auth failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      this.cachedToken = data.access_token;
+      return this.cachedToken;
+    } catch (err) {
+      this.log.error('Failed to get Homebridge auth token:', err.message);
+      throw err;
     }
-
-    const data = await response.json();
-    this.cachedToken = data.access_token;
-    return this.cachedToken;
   }
 
+  /**
+   * Make a trigger request to turn on a switch
+   */
+  async makeTriggerRequest(url, token) {
+    return fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        characteristicType: 'On',
+        value: true
+      })
+    });
+  }
+
+  /**
+   * Trigger wake-up switch to activate a device
+   */
   async triggerWakeupSwitch() {
     if (!this.username || !this.password || !this.switchUuid) {
       this.log.warn('Trigger skipped: missing homebridgeUsername, homebridgePassword, or triggerSwitchUuid.');
@@ -42,38 +73,18 @@ class TriggerClient {
 
     try {
       this.log.info('Waking up device via trigger switch...');
-      
+
       let token = await this.getAuthToken();
-      let url = `${this.homebridgeUrl}/api/accessories/${encodeURIComponent(this.switchUuid)}`;
+      const url = `${this.homebridgeUrl}/api/accessories/${encodeURIComponent(this.switchUuid)}`;
 
-      let response = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          characteristicType: 'On',
-          value: true
-        })
-      });
+      let response = await this.makeTriggerRequest(url, token);
 
+      // Retry on 401 (unauthorized)
       if (response.status === 401) {
         this.log.info('Token expired, renewing authentication...');
         this.cachedToken = null;
         token = await this.getAuthToken();
-
-        response = await fetch(url, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            characteristicType: 'On',
-            value: true
-          })
-        });
+        response = await this.makeTriggerRequest(url, token);
       }
 
       if (!response.ok) {
