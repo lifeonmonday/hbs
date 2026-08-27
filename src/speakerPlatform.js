@@ -13,24 +13,24 @@ class SpotifySpeakerPlatform {
     this.currentVolume = 30;
     this.isMuted = false;
 
-    // Instancja klienta Spotify
     this.client = new SpotifyClient(this.config, this.log);
 
-    // Rejestracja standardowa (bez publishExternalAccessories)
-    this.accessory = this.setupAccessory();
+    // Wywołujemy rejestrację dopiero po pełnym wybudzeniu Homebridge
+    this.api.on('didFinishLaunching', () => {
+      this.setupAndRegisterAccessory();
+    });
 
-    // Start odpytywania w tle
     this.startPolling();
   }
 
-  setupAccessory() {
+  setupAndRegisterAccessory() {
     const uuid = this.api.hap.uuid.generate(`spotify-speaker-${this.config.deviceId || 'default'}`);
     const accessory = new this.api.platformAccessory(`${this.baseName} Speaker`, uuid);
 
     // USŁUGA SPEAKER
     this.speakerService = accessory.addService(this.Service.Speaker, `${this.baseName} Speaker`);
 
-    // 1. CECHA: MUTE (WYCISZENIE - WYMAGANA PRZEZ HAP)
+    // 1. MUTE
     this.speakerService.getCharacteristic(this.Characteristic.Mute)
       .onGet(() => this.isMuted)
       .onSet(async (value) => {
@@ -45,7 +45,7 @@ class SpotifySpeakerPlatform {
         }
       });
 
-    // 2. CECHA: VOLUME (SUWAK GŁOŚNOŚCI 0-100%)
+    // 2. VOLUME
     this.speakerService.getCharacteristic(this.Characteristic.Volume)
       .onGet(() => this.currentVolume)
       .onSet(async (value) => {
@@ -60,7 +60,9 @@ class SpotifySpeakerPlatform {
         }
       });
 
-    return accessory;
+    // REJESTRACJA AKCESORIUM W MAIN BRIDGE
+    this.api.registerPlatformAccessories('homebridge-spotify-tv', 'SpotifySpeaker', [accessory]);
+    this.log.info(`Registered Speaker accessory: ${this.baseName} Speaker`);
   }
 
   startPolling() {
@@ -74,9 +76,10 @@ class SpotifySpeakerPlatform {
           this.currentVolume = state.device.volume_percent;
           this.isMuted = (this.currentVolume === 0);
 
-          // Pchamy aktualną głośność do HomeKit
-          this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
-          this.speakerService.updateCharacteristic(this.Characteristic.Mute, this.isMuted);
+          if (this.speakerService) {
+            this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
+            this.speakerService.updateCharacteristic(this.Characteristic.Mute, this.isMuted);
+          }
         }
       } catch (err) {
         // Cichy przechwytywacz błędów w tle
