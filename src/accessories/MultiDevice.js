@@ -60,24 +60,39 @@ class MultiDeviceAccessory {
       .onGet(() => this.currentVolume)
       .onSet(async (val) => { await this.spotifyClient.setVolume(val, this.config.deviceId); this.currentVolume = val; });
 
-    // 3. Lightbulb (The Visible Slider)
-    this.lightbulbService = accessory.addService(this.Service.Lightbulb, 'Volume Slider', 'vol_slider');
+    // // 3. Fan Service (The "Speed" Volume Slider Hack)
+    this.fanService = accessory.addService(this.Service.Fan, 'Volume', 'vol_fan');
 
-    // Add 'On' characteristic and force it to 'true' so the slider is always accessible
-    this.lightbulbService.getCharacteristic(this.Characteristic.On)
-      .onGet(() => true)
-      .onSet(async (val) => {
-        // Optional: If you click the slider "off", do nothing or pause playback
-        if (!val) await this.spotifyClient.pause(this.config.deviceId);
-      });
-
-    this.lightbulbService.getCharacteristic(this.Characteristic.Brightness)
+    // Fan service has RotationSpeed (0-100) instead of Brightness
+    this.fanService.getCharacteristic(this.Characteristic.RotationSpeed)
       .setProps({ minValue: 0, maxValue: 100, minStep: 5 })
       .onGet(() => this.currentVolume)
       .onSet(async (val) => {
         await this.spotifyClient.setVolume(val, this.config.deviceId);
         this.currentVolume = val;
       });
+
+    this.tvService.addLinkedService(this.fanService);
+
+    // 3. Lightbulb (The Visible Slider)
+//    this.lightbulbService = accessory.addService(this.Service.Lightbulb, 'Volume Slider', 'vol_slider');
+
+    // Add 'On' characteristic and force it to 'true' so the slider is always accessible
+    // this.lightbulbService.getCharacteristic(this.Characteristic.On)
+    //  .onGet(() => true)
+    //  .onSet(async (val) => {
+        // Optional: If you click the slider "off", do nothing or pause playback
+    //    if (!val) await this.spotifyClient.pause(this.config.deviceId);
+    //  });
+
+//    this.lightbulbService.getCharacteristic(this.Characteristic.Brightness)
+//      .setProps({ minValue: 0, maxValue: 100, minStep: 5 })
+//      .onGet(() => this.currentVolume)
+//      .onSet(async (val) => {
+//        await this.spotifyClient.setVolume(val, this.config.deviceId);
+//        this.currentVolume = val;
+//      });
+//
 
 
     // 4. Input Source
@@ -89,7 +104,7 @@ class MultiDeviceAccessory {
       .setCharacteristic(this.Characteristic.InputDeviceType, this.Characteristic.InputDeviceType.AUDIO_SYSTEM);
 
     this.tvService.addLinkedService(this.speakerService);
-    this.tvService.addLinkedService(this.lightbulbService);
+//    this.tvService.addLinkedService(this.lightbulbService);
     this.tvService.addLinkedService(this.trackInputService);
 
     this.api.publishExternalAccessories('homebridge-hbs', [accessory]);
@@ -125,7 +140,9 @@ class MultiDeviceAccessory {
           this.currentVolume = state.device.volume_percent;
           this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
           this.speakerService.updateCharacteristic(this.Characteristic.Mute, this.currentVolume === 0);
-          this.lightbulbService.updateCharacteristic(this.Characteristic.Brightness, this.currentVolume);
+          // this.lightbulbService.updateCharacteristic(this.Characteristic.Brightness, this.currentVolume);
+          // Sync the fan speed
+          this.fanService.updateCharacteristic(this.Characteristic.RotationSpeed, this.currentVolume);
 
         }
 
