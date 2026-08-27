@@ -65,7 +65,7 @@ class MultiDeviceAccessory {
 
     // Add 'On' characteristic and force it to 'true' so the slider is always accessible
     this.lightbulbService.getCharacteristic(this.Characteristic.On)
-      .onGet(() => false)
+      .onGet(() => true)
       .onSet(async (val) => {
         // Optional: If you click the slider "off", do nothing or pause playback
         if (!val) await this.spotifyClient.pause(this.config.deviceId);
