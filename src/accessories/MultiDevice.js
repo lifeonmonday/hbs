@@ -61,16 +61,31 @@ class MultiDeviceAccessory {
       .onSet(async (val) => { await this.spotifyClient.setVolume(val, this.config.deviceId); this.currentVolume = val; });
 
     // // 3. Fan Service (The "Speed" Volume Slider Hack)
-    this.fanService = accessory.addService(this.Service.Fan, 'Volume', 'vol_fan');
+    this.fanService = accessory.addService(this.Service.Fanv2, 'Volume', 'vol_fan_v2');
 
-    // Fan service has RotationSpeed (0-100) instead of Brightness
-    this.fanService.getCharacteristic(this.Characteristic.RotationSpeed)
-      .setProps({ minValue: 0, maxValue: 100, minStep: 5 })
-      .onGet(() => this.currentVolume)
-      .onSet(async (val) => {
-        await this.spotifyClient.setVolume(val, this.config.deviceId);
-        this.currentVolume = val;
-      });
+       // Use Active to sync power state with the TV
+       this.fanService.getCharacteristic(this.Characteristic.Active)
+         .onGet(() => (this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE))
+         .onSet(async (value) => {
+           const shouldPlay = value === this.Characteristic.Active.ACTIVE;
+           if (shouldPlay) {
+             try { await this.spotifyClient.play(this.config.deviceId); this.isPlaying = true; }
+             catch (err) { await this.triggerClient.triggerWakeupSwitch(); this.isPlaying = true; }
+           } else {
+             await this.spotifyClient.pause(this.config.deviceId); this.isPlaying = false;
+           }
+           // Update both TV and Fan power states to keep them perfectly in sync
+           this.tvService.updateCharacteristic(this.Characteristic.Active, value);
+         });
+
+       // RotationSpeed as the Volume Slider
+       this.fanService.getCharacteristic(this.Characteristic.RotationSpeed)
+         .setProps({ minValue: 0, maxValue: 100, minStep: 5 })
+         .onGet(() => this.currentVolume)
+         .onSet(async (val) => {
+           await this.spotifyClient.setVolume(val, this.config.deviceId);
+           this.currentVolume = val;
+         });
 
     this.tvService.addLinkedService(this.fanService);
 
@@ -135,6 +150,13 @@ class MultiDeviceAccessory {
           this.Characteristic.Active,
           this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE
         );
+
+        // Update Fan Power (Active) and Speed (Volume)
+             this.fanService.updateCharacteristic(
+               this.Characteristic.Active,
+               this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE
+             );
+
 
         if (state.device.volume_percent !== null && state.device.volume_percent !== undefined) {
           this.currentVolume = state.device.volume_percent;
