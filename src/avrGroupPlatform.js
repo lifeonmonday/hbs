@@ -15,48 +15,51 @@ class SpotifyAvrGroupPlatform {
     this.currentVolume = 30;
     this.isPlaying = false;
 
+    // Inicjalizacja klienta Spotify
     this.client = new SpotifyClient(this.config, this.log);
 
-    // Rejestracja po wybudzeniu Homebridge (dla External Accessory)
-    this.api.on('didFinishLaunching', () => {
-      this.setupAndRegisterAccessory();
-      this.startPolling();
+    this.api.on('didFinishLaunching', async () => {
+      try {
+        // 1. Zabezpieczenie Auth: Upewniamy się, że klient wczytał tokeny z dysku
+        if (typeof this.client.init === 'function') {
+          await this.client.init();
+        }
+
+        // 2. Tworzymy i publikujemy akcesorium
+        this.setupAndRegisterAccessory();
+        this.startPolling();
+      } catch (err) {
+        this.log.error('Failed to initialize Spotify Client:', err.message);
+      }
     });
   }
-
   setupAndRegisterAccessory() {
     const uuid = this.api.hap.uuid.generate(`spotify-avr-group-${this.deviceId || 'default'}`);
     
-    // Tworzymy jedno akcesorium
+    // Tworzymy akcesorium
     this.accessory = new this.api.platformAccessory(this.name, uuid);
+
+    // --------------------------------------------------------
+    // KLUCZOWY BRAKUJĄCY ELEMENT: KATEGORIA AKCESORIUM
+    // --------------------------------------------------------
+    this.accessory.category = this.api.hap.Categories.AUDIO_RECEIVER;
 
     // --------------------------------------------------------
     // SERWIS 1: TELEVISION (AVR)
     // --------------------------------------------------------
     this.tvService = this.accessory.addService(this.Service.Television, this.name, 'main-avr');
+    
+    // Ustawienie typu urządzenia w servisie TV
+    this.tvService.setCharacteristic(
+      this.Characteristic.TelevisionDeviceType,
+      this.Characteristic.TelevisionDeviceType.AUDIO_RECEIVER
+    );
+
     this.tvService.setCharacteristic(this.Characteristic.ConfiguredName, this.name);
     this.tvService.setCharacteristic(
       this.Characteristic.SleepDiscoveryMode,
       this.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE
     );
-
-    // Włącznik AVR (Play / Pause)
-    this.tvService.getCharacteristic(this.Characteristic.Active)
-      .onGet(() => (this.isPlaying ? 1 : 0))
-      .onSet(async (value) => {
-        try {
-          if (value === 1) {
-            await this.client.play(this.deviceId);
-            this.log.info('Spotify playback started');
-          } else {
-            await this.client.pause(this.deviceId);
-            this.log.info('Spotify playback paused');
-          }
-          this.isPlaying = (value === 1);
-        } catch (err) {
-          this.log.error('Failed to toggle play/pause:', err.message);
-        }
-      });
 
     // Pilot z Centrum Sterowania (Fizyczne przyciski głośności w iPhonie)
     this.tvService.getCharacteristic(this.Characteristic.RemoteKey)
