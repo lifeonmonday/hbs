@@ -113,7 +113,7 @@ class SpotifyAvrGroupPlatform {
     this.tvService.addLinkedService(this.volumeService);
 
     // Rejestracja jako External Accessory (Wymagane dla serwisu Television)
-    this.api.publishExternalAccessories('homebridge-spotify-tv', [this.accessory]);
+    this.api.publishExternalAccessories('homebridge-spotify-smart-speaker', [this.accessory]);
     this.log.info(`Published Grouped AVR Accessory: ${this.name}`);
   }
 
