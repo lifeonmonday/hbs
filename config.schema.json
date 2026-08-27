@@ -5,54 +5,82 @@
     "type": "object",
     "properties": {
       "name": {
-        "title": "Accessory Name",
+        "title": "Platform Name",
         "type": "string",
         "default": "Spotify",
         "required": true
       },
-      "accessoryType": {
-        "title": "Accessory Type",
-        "type": "string",
-        "enum": ["SmartSpeaker", "AudioReceiver"],
-        "default": "SmartSpeaker",
-        "description": "SmartSpeaker: basic play/pause and volume. AudioReceiver: TV-style with track info display.",
-        "required": true
-      },
       "clientId": {
-        "title": "Client ID",
+        "title": "Spotify Client ID",
         "type": "string",
         "description": "Your Spotify Developer Application Client ID.",
         "required": true
       },
       "clientSecret": {
-        "title": "Client Secret",
+        "title": "Spotify Client Secret",
         "type": "string",
         "description": "Your Spotify Developer Application Client Secret.",
         "required": true
       },
-      "authCode": {
-        "title": "Authorization Code",
-        "type": "string",
-        "description": "Paste the 'code' parameter from the Spotify callback URL for initial token setup."
-      },
       "refreshToken": {
-        "title": "Refresh Token",
+        "title": "Spotify Refresh Token",
         "type": "string",
-        "description": "Optional: Existing Refresh Token if already generated."
+        "description": "Your Spotify Refresh Token."
       },
-      "deviceId": {
-        "title": "Spotify Device ID",
+      "authCode": {
+        "title": "Spotify Authorization Code",
         "type": "string",
-        "description": "Target Spotify Connect Device ID.",
-        "required": true
+        "description": "Paste the 'code' parameter from the callback URL for initial token setup."
       },
       "pollInterval": {
-        "title": "Poll Interval (seconds)",
+        "title": "Default Poll Interval (seconds)",
         "type": "number",
         "default": 5,
         "minimum": 1,
         "maximum": 60,
         "description": "How often to check Spotify playback state (in seconds)."
+      },
+      "accessories": {
+        "title": "Accessories",
+        "type": "array",
+        "description": "Configure the Spotify accessories you want to expose to HomeKit.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Accessory Name",
+              "type": "string",
+              "placeholder": "Living Room Speaker",
+              "required": true
+            },
+            "accessoryType": {
+              "title": "Accessory Type",
+              "type": "string",
+              "enum": ["SmartSpeaker", "AudioReceiver"],
+              "default": "SmartSpeaker",
+              "description": "SmartSpeaker: media tile with Play/Pause & Volume. AudioReceiver: TV-style AVR with Now Playing track info & volume slider.",
+              "required": true
+            },
+            "deviceId": {
+              "title": "Spotify Device ID",
+              "type": "string",
+              "description": "Target Spotify Connect Device ID.",
+              "required": true
+            },
+            "triggerSwitchUuid": {
+              "title": "Custom Wake-up Switch UUID",
+              "type": "string",
+              "description": "Optional: Specific switch UUID to trigger for this device (overrides global trigger)."
+            },
+            "pollInterval": {
+              "title": "Custom Poll Interval (seconds)",
+              "type": "number",
+              "minimum": 1,
+              "maximum": 60,
+              "description": "Optional: Custom polling interval for this accessory."
+            }
+          }
+        }
       },
       "homebridgeUrl": {
         "title": "Homebridge URL (for Wake-up Trigger)",
@@ -71,10 +99,52 @@
         "description": "Optional: Password for Homebridge auth (needed for wake-up trigger)."
       },
       "triggerSwitchUuid": {
-        "title": "Trigger Switch UUID (for Wake-up)",
+        "title": "Global Wake-up Switch UUID",
         "type": "string",
-        "description": "Optional: UUID of a switch accessory to trigger for wake-up."
+        "description": "Optional: Default UUID of a switch accessory to trigger for wake-up."
       }
     }
-  }
+  },
+  "layout": [
+    "name",
+    {
+      "type": "fieldset",
+      "title": "Spotify Credentials",
+      "items": [
+        "clientId",
+        "clientSecret",
+        "refreshToken",
+        "authCode"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Spotify Accessories",
+      "items": [
+        {
+          "key": "accessories",
+          "type": "array",
+          "items": [
+            "accessories[].name",
+            "accessories[].accessoryType",
+            "accessories[].deviceId",
+            "accessories[].triggerSwitchUuid",
+            "accessories[].pollInterval"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Optional: Wake-up Trigger & Advanced",
+      "expandable": true,
+      "items": [
+        "pollInterval",
+        "triggerSwitchUuid",
+        "homebridgeUrl",
+        "homebridgeUsername",
+        "homebridgePassword"
+      ]
+    }
+  ]
 }

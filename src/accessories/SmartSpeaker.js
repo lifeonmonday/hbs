@@ -36,7 +36,7 @@ class SmartSpeakerAccessory {
    */
   registerAccessory() {
     const name = this.config.name || 'Spotify Speaker';
-    const uuid = this.api.hap.uuid.generate(this.config.deviceId || 'spotify-smart-speaker');
+    const uuid = this.api.hap.uuid.generate(`spotify-speaker-${this.config.deviceId || 'default'}`);
     const accessory = new this.api.platformAccessory(name, uuid);
 
     accessory.category = this.api.hap.Categories.SPEAKER;

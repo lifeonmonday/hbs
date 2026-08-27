@@ -2,13 +2,14 @@ const SpotifyWebApi = require('spotify-web-api-node');
 
 /**
  * Spotify Web API client wrapper
- * Handles authentication and playback control
+ * Handles authentication and playback control with token caching
  */
 class SpotifyClient {
   constructor(config, log) {
     this.log = log;
     this.config = config;
     this.refreshToken = config.refreshToken || null;
+    this.tokenExpiresAt = 0; // Timestamp (ms) when current access token expires
 
     // Validate required config fields
     const required = ['clientId', 'clientSecret'];
@@ -33,6 +34,9 @@ class SpotifyClient {
         this.log.info('Exchanging authorization code for initial tokens...');
         const data = await this.api.authorizationCodeGrant(this.config.authCode);
         this.refreshToken = data.body['refresh_token'];
+        const expiresIn = data.body['expires_in'] || 3600;
+        this.tokenExpiresAt = Date.now() + (expiresIn - 60) * 1000;
+
         this.api.setRefreshToken(this.refreshToken);
         this.api.setAccessToken(data.body['access_token']);
 
@@ -45,7 +49,7 @@ class SpotifyClient {
 
       if (this.refreshToken) {
         this.api.setRefreshToken(this.refreshToken);
-        await this.refreshTokens();
+        await this.ensureValidToken(true);
         return;
       }
 
@@ -57,12 +61,19 @@ class SpotifyClient {
   }
 
   /**
-   * Refresh access token using refresh token
+   * Ensure access token is valid, refreshing only when expired or forced
    */
-  async refreshTokens() {
+  async ensureValidToken(force = false) {
+    if (!force && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
+      return;
+    }
+
     try {
       const data = await this.api.refreshAccessToken();
+      const expiresIn = data.body['expires_in'] || 3600;
+      this.tokenExpiresAt = Date.now() + (expiresIn - 60) * 1000;
       this.api.setAccessToken(data.body['access_token']);
+
       if (data.body['refresh_token']) {
         this.refreshToken = data.body['refresh_token'];
         this.api.setRefreshToken(this.refreshToken);
@@ -74,12 +85,28 @@ class SpotifyClient {
   }
 
   /**
+   * Wrapper to execute Spotify API requests with auto-retry on 401
+   */
+  async executeApiCall(fn) {
+    await this.ensureValidToken();
+    try {
+      return await fn();
+    } catch (err) {
+      if (err.statusCode === 401 || (err.message && err.message.includes('401'))) {
+        this.log.warn('Spotify access token expired (401), refreshing token and retrying...');
+        await this.ensureValidToken(true);
+        return await fn();
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Start playback on the specified device
    */
   async play(deviceId) {
     try {
-      await this.refreshTokens();
-      return await this.api.play({ device_id: deviceId });
+      return await this.executeApiCall(() => this.api.play({ device_id: deviceId }));
     } catch (err) {
       this.log.error('Play command failed:', err.message);
       throw err;
@@ -91,8 +118,7 @@ class SpotifyClient {
    */
   async pause(deviceId) {
     try {
-      await this.refreshTokens();
-      return await this.api.pause({ device_id: deviceId });
+      return await this.executeApiCall(() => this.api.pause({ device_id: deviceId }));
     } catch (err) {
       this.log.error('Pause command failed:', err.message);
       throw err;
@@ -104,8 +130,7 @@ class SpotifyClient {
    */
   async setVolume(volume, deviceId) {
     try {
-      await this.refreshTokens();
-      return await this.api.setVolume(volume, { device_id: deviceId });
+      return await this.executeApiCall(() => this.api.setVolume(volume, { device_id: deviceId }));
     } catch (err) {
       this.log.error('Volume adjustment failed:', err.message);
       throw err;
@@ -117,11 +142,9 @@ class SpotifyClient {
    */
   async getPlaybackState() {
     try {
-      await this.refreshTokens();
-      const response = await this.api.getMyCurrentPlaybackState();
+      const response = await this.executeApiCall(() => this.api.getMyCurrentPlaybackState());
       return response.body || null;
     } catch (err) {
-      this.log.warn('Failed to get playback state:', err.message);
       return null;
     }
   }

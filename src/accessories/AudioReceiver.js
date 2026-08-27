@@ -2,8 +2,8 @@ const TriggerClient = require('../trigger');
 
 /**
  * Audio Receiver Accessory Implementation
- * Uses HomeKit Television service with track display as input source
- * No volume buttons in Remote app - only play/pause and track info
+ * Uses HomeKit Television service (category AUDIO_RECEIVER) with track display
+ * as an input source and native volume slider in TelevisionSpeaker for 3rd-party apps (Eve, Controller).
  */
 class AudioReceiverAccessory {
   constructor(log, config, api, spotifyClient) {
@@ -16,7 +16,7 @@ class AudioReceiverAccessory {
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
 
-    this.baseName = config.name || 'Spotify';
+    this.displayName = config.name || 'Spotify Audio Receiver';
     this.isPlaying = false;
     this.currentVolume = 30;
     this.currentTrack = '';
@@ -38,7 +38,7 @@ class AudioReceiverAccessory {
    */
   setupAccessory() {
     const uuid = this.api.hap.uuid.generate(`spotify-avr-${this.config.deviceId || 'default'}`);
-    const accessory = new this.api.platformAccessory(`${this.baseName} AVR`, uuid, 34);
+    const accessory = new this.api.platformAccessory(this.displayName, uuid, 34);
 
     const accessoryInfo = accessory.getService(this.Service.AccessoryInformation);
     accessoryInfo
@@ -46,14 +46,14 @@ class AudioReceiverAccessory {
       .setCharacteristic(this.Characteristic.Model, 'Audio Receiver')
       .setCharacteristic(this.Characteristic.SerialNumber, this.config.deviceId || '12345678');
 
-    this.tvService = accessory.addService(this.Service.Television, `${this.baseName} AVR`, 'avr_main');
+    this.tvService = accessory.addService(this.Service.Television, this.displayName, 'avr_main');
     this.tvService.setCharacteristic(
       this.Characteristic.SleepDiscoveryMode,
       this.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE
     );
 
     if (!this.tvService.getCharacteristic(this.Characteristic.ConfiguredName).value) {
-      this.tvService.setCharacteristic(this.Characteristic.ConfiguredName, `${this.baseName} AVR`);
+      this.tvService.setCharacteristic(this.Characteristic.ConfiguredName, this.displayName);
     }
 
     // Play/Pause via Active characteristic
@@ -91,15 +91,39 @@ class AudioReceiverAccessory {
         }
       });
 
-    // Speaker service (required for TV but no volume selector in Remote app)
-    this.speakerService = accessory.addService(this.Service.TelevisionSpeaker, 'Volume Control', 'avr_speaker');
+    // Speaker service with Volume and Mute for 3rd-party apps (Eve, Controller, etc.)
+    this.speakerService = accessory.addService(this.Service.TelevisionSpeaker, `${this.displayName} Volume`, 'avr_speaker');
     this.speakerService
       .setCharacteristic(this.Characteristic.Active, this.Characteristic.Active.ACTIVE)
       .setCharacteristic(this.Characteristic.VolumeControlType, this.Characteristic.VolumeControlType.ABSOLUTE);
 
+    // Volume characteristic (0-100 slider in Eve / Controller)
+    this.speakerService.getCharacteristic(this.Characteristic.Volume)
+      .onGet(() => this.currentVolume)
+      .onSet(async (value) => {
+        try {
+          await this.spotifyClient.setVolume(value, this.config.deviceId);
+          this.currentVolume = value;
+        } catch (err) {
+          this.log.error('Volume adjustment error:', err.message);
+        }
+      });
+
+    // Mute characteristic
+    this.speakerService.getCharacteristic(this.Characteristic.Mute)
+      .onGet(() => this.currentVolume === 0)
+      .onSet(async (muted) => {
+        try {
+          const targetVol = muted ? 0 : (this.currentVolume || 30);
+          await this.spotifyClient.setVolume(targetVol, this.config.deviceId);
+        } catch (err) {
+          this.log.error('Mute toggle error:', err.message);
+        }
+      });
+
     this.tvService.addLinkedService(this.speakerService);
 
-    // Input source: Track display only (no volume presets)
+    // Input source: Track display
     this.trackInputService = accessory.addService(this.Service.InputSource, 'track_display', 'Track Display');
     this.trackInputService
       .setCharacteristic(this.Characteristic.Identifier, 0)
@@ -135,13 +159,16 @@ class AudioReceiverAccessory {
           this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE
         );
 
-        if (state.device.volume_percent !== null) {
+        if (state.device.volume_percent !== null && state.device.volume_percent !== undefined) {
           this.currentVolume = state.device.volume_percent;
+          this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
+          this.speakerService.updateCharacteristic(this.Characteristic.Mute, this.currentVolume === 0);
         }
 
-        // Update track display in input source
+        // Update track display in input source with all artists
         if (state.item && state.item.artists && state.item.artists.length > 0) {
-          const trackText = `${state.item.name} · ${state.item.artists[0].name}`;
+          const artistNames = state.item.artists.map((a) => a.name).join(', ');
+          const trackText = `${state.item.name} · ${artistNames}`;
           if (this.currentTrack !== trackText) {
             this.currentTrack = trackText;
             this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, trackText);
@@ -151,7 +178,7 @@ class AudioReceiverAccessory {
         }
 
         this.tvService.updateCharacteristic(this.Characteristic.ActiveIdentifier, 0);
-        this.pollErrorCount = 0; // Reset error counter on success
+        this.pollErrorCount = 0;
       } catch (err) {
         this.log.warn(`Polling error: ${err.message}`);
         this.pollErrorCount++;
