@@ -125,7 +125,7 @@ class AudioReceiverAccessory {
     this.trackInputService = accessory.addService(this.Service.InputSource, 'track_display', 'Track Display');
     this.trackInputService
       .setCharacteristic(this.Characteristic.Identifier, 0)
-      .setCharacteristic(this.Characteristic.ConfiguredName, 'Not Playing')
+      .setCharacteristic(this.Characteristic.ConfiguredName, 'Spotify')
       .setCharacteristic(this.Characteristic.IsConfigured, this.Characteristic.IsConfigured.CONFIGURED)
       .setCharacteristic(this.Characteristic.InputSourceType, this.Characteristic.InputSourceType.APPLICATION);
 
@@ -175,9 +175,9 @@ class AudioReceiverAccessory {
             this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, trackText);
           }
         } else {
-          if (this.currentTrack !== 'Not Playing') {
-            this.currentTrack = 'Not Playing';
-            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Not Playing');
+          if (this.currentTrack !== 'Playing') {
+            this.currentTrack = 'Playing';
+            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Playing');
           }
         }
 
