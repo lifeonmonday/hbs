@@ -74,9 +74,6 @@ class AudioReceiverAccessory {
             } catch (triggerErr) {
               this.log.error('Wake-up trigger failed:', triggerErr.message);
               this.isPlaying = false;
-              setTimeout(() => {
-                this.tvService.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.INACTIVE);
-              }, 500);
             }
           }
         } else {
