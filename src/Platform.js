@@ -11,7 +11,7 @@ class SpotifyPlatform {
     this.log = log;
     this.config = config || {};
     this.api = api;
-    this.accessories = [];
+    this.activeAccessories = [];
 
     // Map accessory types to their implementation classes
     this.accessoryClasses = {
@@ -64,7 +64,7 @@ class SpotifyPlatform {
 
         const accessoryInstance = new AccessoryClass(this.log, mergedConfig, this.api, spotifyClient);
         await accessoryInstance.initialize();
-        this.accessories.push(accessoryInstance);
+        this.activeAccessories.push(accessoryInstance);
 
         this.log.info(`Initialized ${accessoryType} accessory: "${mergedConfig.name || 'Spotify'}" (Device ID: ${mergedConfig.deviceId})`);
       }
