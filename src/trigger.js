@@ -95,6 +95,7 @@ class TriggerClient {
       this.log.info('Wake-up trigger switch successfully turned ON.');
     } catch (err) {
       this.log.error('Failed to execute wake-up trigger:', err.message);
+      throw err;
     }
   }
 }

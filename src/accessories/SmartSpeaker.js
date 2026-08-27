@@ -66,17 +66,34 @@ class SmartSpeakerAccessory {
       .onGet(() => this.targetMediaState)
       .onSet(async (value) => {
         this.targetMediaState = value;
-        try {
-          if (value === this.Characteristic.TargetMediaState.PLAY) {
+
+        if (value === this.Characteristic.TargetMediaState.PLAY) {
+          try {
             await this.spotifyClient.play(this.config.deviceId);
             this.currentMediaState = this.Characteristic.CurrentMediaState.PLAY;
-          } else {
+            this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
+          } catch (err) {
+            this.log.warn('Direct play failed (device likely idle/asleep), firing wake-up trigger...');
+            try {
+              await this.triggerClient.triggerWakeupSwitch();
+              this.currentMediaState = this.Characteristic.CurrentMediaState.PLAY;
+              this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
+            } catch (triggerErr) {
+              this.log.error('Wake-up trigger failed:', triggerErr.message);
+              this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
+              this.targetMediaState = this.Characteristic.TargetMediaState.PAUSE;
+              this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
+              this.speakerService.updateCharacteristic(this.Characteristic.TargetMediaState, this.targetMediaState);
+            }
+          }
+        } else {
+          try {
             await this.spotifyClient.pause(this.config.deviceId);
             this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
+            this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
+          } catch (err) {
+            this.log.error('Pause command failed:', err.message);
           }
-          this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
-        } catch (err) {
-          this.log.error('Playback state change error:', err.message);
         }
       });
 

@@ -62,31 +62,29 @@ class AudioReceiverAccessory {
       .onSet(async (value) => {
         const shouldPlay = value === this.Characteristic.Active.ACTIVE;
 
-        try {
-          if (shouldPlay) {
+        if (shouldPlay) {
+          try {
             await this.spotifyClient.play(this.config.deviceId);
             this.isPlaying = true;
-          } else {
+          } catch (err) {
+            this.log.warn('Direct play failed (device likely idle/asleep), firing wake-up trigger...');
+            try {
+              await this.triggerClient.triggerWakeupSwitch();
+              this.isPlaying = true; // Mark active while speaker boots and trigger starts playback
+            } catch (triggerErr) {
+              this.log.error('Wake-up trigger failed:', triggerErr.message);
+              this.isPlaying = false;
+              setTimeout(() => {
+                this.tvService.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.INACTIVE);
+              }, 500);
+            }
+          }
+        } else {
+          try {
             await this.spotifyClient.pause(this.config.deviceId);
             this.isPlaying = false;
-          }
-        } catch (err) {
-          this.log.warn('Direct control failed, attempting wake-up trigger...');
-          try {
-            await this.triggerClient.triggerWakeupSwitch();
-            if (shouldPlay) {
-              await this.spotifyClient.play(this.config.deviceId);
-              this.isPlaying = true;
-            } else {
-              await this.spotifyClient.pause(this.config.deviceId);
-              this.isPlaying = false;
-            }
-          } catch (retryErr) {
-            this.log.error('Playback control failed after wake-up:', retryErr.message);
-            this.isPlaying = false;
-            setTimeout(() => {
-              this.tvService.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.INACTIVE);
-            }, 500);
+          } catch (err) {
+            this.log.error('Pause command failed:', err.message);
           }
         }
       });
