@@ -18,9 +18,8 @@ class SpotifySpeakerPlatform {
     // Wywołujemy rejestrację dopiero po pełnym wybudzeniu Homebridge
     this.api.on('didFinishLaunching', () => {
       this.setupAndRegisterAccessory();
+      this.startPolling();
     });
-
-    this.startPolling();
   }
 
   setupAndRegisterAccessory() {
