@@ -2,6 +2,7 @@ const SpotifySmartSpeakerPlatform = require('./src/platform');
 const SpotifyTVPlatform = require('./src/tvPlatform');
 const SpotifyLightbulbPlatform = require('./src/lightbulbPlatform');
 const SpotifySpeakerPlatform = require('./src/speakerPlatform');
+const SpotifyAvrGroupPlatform = require('./src/avrGroupPlatform');
 
 module.exports = (api) => {
   // Original Smart Speaker
@@ -15,4 +16,7 @@ module.exports = (api) => {
   
   // Test Regular Speaker
   api.registerPlatform('homebridge-spotify-smart-speaker','SpotifySpeakerPlatform', SpotifySpeakerPlatform);
+
+  // Test Avr Group
+  api.registerPlatform('homebridge-spotify-smart-speaker','SpotifyAvrGroup', SpotifyAvrGroupPlatform);
 };
