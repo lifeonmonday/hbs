@@ -1,10 +1,5 @@
 const TriggerClient = require('../trigger');
 
-/**
- * Test 3: The Hybrid Pro Setup
- * Primary: Television (AVR)
- * Linked: TelevisionSpeaker (for Hardware Buttons) + Lightbulb (for Visible Slider) + InputSource (for Track Display)
- */
 class MultiDeviceAccessory {
   constructor(log, config, api, spotifyClient) {
     this.log = log;
@@ -22,6 +17,7 @@ class MultiDeviceAccessory {
     this.currentTrack = '';
 
     this.pollingInterval = null;
+    this.pollErrorCount = 0;
   }
 
   async initialize() {
@@ -30,49 +26,54 @@ class MultiDeviceAccessory {
   }
 
   setupAccessory() {
-    // New UUID for Test 3
-    const uuid = this.api.hap.uuid.generate(`spotify-multi-test3-${this.config.deviceId || 'default'}`);
-    const accessory = new this.api.platformAccessory(this.displayName, uuid, 34); // 34: Audio Receiver
+    const uuid = this.api.hap.uuid.generate(`spotify-multi-${this.config.deviceId || 'default'}`);
+    const accessory = new this.api.platformAccessory(this.displayName, uuid, 34); // Audio Receiver
 
     const accessoryInfo = accessory.getService(this.Service.AccessoryInformation);
     accessoryInfo
       .setCharacteristic(this.Characteristic.Manufacturer, 'Spotify')
-      .setCharacteristic(this.Characteristic.Model, 'Test 3: Hybrid Pro')
+      .setCharacteristic(this.Characteristic.Model, 'Cast Group')
       .setCharacteristic(this.Characteristic.SerialNumber, this.config.deviceId || '12345678');
 
     // 1. Primary Television Service
     this.tvService = accessory.addService(this.Service.Television, this.displayName, 'avr_main');
     this.tvService.setCharacteristic(this.Characteristic.SleepDiscoveryMode, this.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE);
+    this.tvService.setCharacteristic(this.Characteristic.ConfiguredName, this.displayName);
 
-    // 2. TelevisionSpeaker (For hardware buttons support)
-    this.speakerService = accessory.addService(this.Service.TelevisionSpeaker, 'System Volume', 'avr_speaker');
-    this.speakerService.setCharacteristic(this.Characteristic.Active, this.Characteristic.Active.ACTIVE)
-      .setCharacteristic(this.Characteristic.VolumeControlType, this.Characteristic.VolumeControlType.ABSOLUTE);
+    // Play/Pause Logic
+    this.tvService.getCharacteristic(this.Characteristic.Active)
+      .onGet(() => (this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE))
+      .onSet(async (value) => {
+        const shouldPlay = value === this.Characteristic.Active.ACTIVE;
+        if (shouldPlay) {
+          try { await this.spotifyClient.play(this.config.deviceId); this.isPlaying = true; }
+          catch (err) { await this.triggerClient.triggerWakeupSwitch(); this.isPlaying = true; }
+        } else {
+          await this.spotifyClient.pause(this.config.deviceId); this.isPlaying = false;
+        }
+      });
 
+    // 2. Speaker (for Hardware Buttons)
+    this.speakerService = accessory.addService(this.Service.TelevisionSpeaker, 'Volume Control', 'avr_speaker');
+    this.speakerService.setCharacteristic(this.Characteristic.VolumeControlType, this.Characteristic.VolumeControlType.ABSOLUTE);
     this.speakerService.getCharacteristic(this.Characteristic.Volume)
       .onGet(() => this.currentVolume)
-      .onSet(async (value) => {
-        await this.spotifyClient.setVolume(value, this.config.deviceId);
-        this.currentVolume = value;
-      });
+      .onSet(async (val) => { await this.spotifyClient.setVolume(val, this.config.deviceId); this.currentVolume = val; });
 
-    // 3. Lightbulb Service (The Visible Slider Hack)
-    this.lightbulbService = accessory.addService(this.Service.Lightbulb, 'Volume', 'volume_slider');
-    this.lightbulbService.addCharacteristic(this.Characteristic.Brightness);
+    // 3. Lightbulb (The Visible Slider)
+    this.lightbulbService = accessory.addService(this.Service.Lightbulb, 'Volume Slider', 'vol_slider');
     this.lightbulbService.getCharacteristic(this.Characteristic.Brightness)
       .onGet(() => this.currentVolume)
-      .onSet(async (value) => {
-        await this.spotifyClient.setVolume(value, this.config.deviceId);
-        this.currentVolume = value;
-      });
+      .onSet(async (val) => { await this.spotifyClient.setVolume(val, this.config.deviceId); this.currentVolume = val; });
 
-    // 4. InputSource (The Now Playing display)
+    // 4. Input Source
     this.trackInputService = accessory.addService(this.Service.InputSource, 'track_display', 'Track Display');
-    this.trackInputService.setCharacteristic(this.Characteristic.Identifier, 0)
+    this.trackInputService
+      .setCharacteristic(this.Characteristic.Identifier, 0)
       .setCharacteristic(this.Characteristic.ConfiguredName, 'Spotify')
-      .setCharacteristic(this.Characteristic.InputSourceType, this.Characteristic.InputSourceType.APPLICATION);
+      .setCharacteristic(this.Characteristic.InputSourceType, this.Characteristic.InputSourceType.APPLICATION)
+      .setCharacteristic(this.Characteristic.InputDeviceType, this.Characteristic.InputDeviceType.AUDIO_SYSTEM);
 
-    // Link everything
     this.tvService.addLinkedService(this.speakerService);
     this.tvService.addLinkedService(this.lightbulbService);
     this.tvService.addLinkedService(this.trackInputService);
@@ -80,30 +81,76 @@ class MultiDeviceAccessory {
     this.api.publishExternalAccessories('homebridge-hbs', [accessory]);
   }
 
+  /**
+   * Start polling for playback state changes
+   */
   startPolling() {
     const interval = (this.config.pollInterval || 5) * 1000;
+
     this.pollingInterval = setInterval(async () => {
       try {
         const state = await this.spotifyClient.getPlaybackState();
-        if (state && state.device) {
-          this.isPlaying = state.is_playing;
-          this.currentVolume = state.device.volume_percent;
 
-          this.tvService.updateCharacteristic(this.Characteristic.Active, this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE);
+        if (!state || !state.device || (this.config.deviceId && state.device.id !== this.config.deviceId)) {
+          this.isPlaying = false;
+          this.tvService.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.INACTIVE);
+          if (this.currentTrack !== 'Not Playing') {
+            this.currentTrack = 'Not Playing';
+            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Not Playing');
+          }
+          return;
+        }
+
+        this.isPlaying = state.is_playing;
+        this.tvService.updateCharacteristic(
+          this.Characteristic.Active,
+          this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE
+        );
+
+        if (state.device.volume_percent !== null && state.device.volume_percent !== undefined) {
+          this.currentVolume = state.device.volume_percent;
           this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
+          this.speakerService.updateCharacteristic(this.Characteristic.Mute, this.currentVolume === 0);
           this.lightbulbService.updateCharacteristic(this.Characteristic.Brightness, this.currentVolume);
 
-          if (state.is_playing && state.item) {
-             const trackText = `${state.item.name}`;
-             this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, trackText);
+        }
+
+        // Update track display in input source with all artists
+        if (state.is_playing && state.item && state.item.artists && state.item.artists.length > 0) {
+          const artistNames = state.item.artists.map((a) => a.name).join(', ');
+          const trackText = `${state.item.name} · ${artistNames}`;
+          if (this.currentTrack !== trackText) {
+            this.currentTrack = trackText;
+            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, trackText);
+          }
+        } else {
+          if (this.currentTrack !== 'Playing') {
+            this.currentTrack = 'Playing';
+            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Playing');
           }
         }
-      } catch (err) { /* error handling */ }
+
+        this.tvService.updateCharacteristic(this.Characteristic.ActiveIdentifier, 0);
+        this.pollErrorCount = 0;
+      } catch (err) {
+        this.log.warn(`Polling error: ${err.message}`);
+        this.pollErrorCount++;
+        if (this.pollErrorCount > 10) {
+          this.log.error('Stopping polling after repeated errors');
+          this.stopPolling();
+        }
+      }
     }, interval);
   }
 
+  /**
+   * Stop the polling interval
+   */
   stopPolling() {
-    if (this.pollingInterval) clearInterval(this.pollingInterval);
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
   }
 }
 
