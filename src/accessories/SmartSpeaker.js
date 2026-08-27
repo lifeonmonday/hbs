@@ -133,8 +133,8 @@ class SmartSpeakerAccessory {
         const state = await this.spotifyClient.getPlaybackState();
 
         if (!state || !state.device || (this.config.deviceId && state.device.id !== this.config.deviceId)) {
-          this.currentMediaState = this.Characteristic.CurrentMediaState.PAUSE;
-          this.targetMediaState = this.Characteristic.TargetMediaState.PAUSE;
+          this.currentMediaState = this.Characteristic.CurrentMediaState.STOP;
+          this.targetMediaState = this.Characteristic.TargetMediaState.STOP;
           this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, this.currentMediaState);
           this.speakerService.updateCharacteristic(this.Characteristic.TargetMediaState, this.targetMediaState);
           return;
