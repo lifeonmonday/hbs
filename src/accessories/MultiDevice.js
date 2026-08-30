@@ -46,6 +46,7 @@ class MultiDeviceAccessory {
       .onSet(async (value) => {
         const shouldPlay = value === this.Characteristic.Active.ACTIVE;
         if (shouldPlay) {
+          this.tvService.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.ACTIVE); // Force UI update to ON
           try { await this.spotifyClient.play(this.config.deviceId); this.isPlaying = true; }
           catch (err) { await this.triggerClient.triggerWakeupSwitch(); this.isPlaying = true; }
         } else {
