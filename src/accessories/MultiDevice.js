@@ -26,7 +26,7 @@ class MultiDeviceAccessory {
   }
 
   setupAccessory() {
-    const uuid = this.api.hap.uuid.generate(`spotify-multi-${this.config.deviceId || 'default'}`);
+    const uuid = this.api.hap.uuid.generate(`spotify-multi-v4-${this.config.deviceId || 'default'}`);
     const accessory = new this.api.platformAccessory(this.displayName, uuid, 34); // Audio Receiver
 
     const accessoryInfo = accessory.getService(this.Service.AccessoryInformation);
@@ -62,11 +62,11 @@ class MultiDeviceAccessory {
 
     // 3. WindowCovering Service (The "Volume Slider" Hack)
     this.volumeService = accessory.addService(this.Service.WindowCovering, 'Volume', 'vol_covering');
-    
+
     // Explicitly tell HomeKit this service does not contribute to the "Active" status of the tile
     this.volumeService.addCharacteristic(this.Characteristic.StatusActive);
     this.volumeService.setCharacteristic(this.Characteristic.StatusActive, false);
-    
+
     this.volumeService.getCharacteristic(this.Characteristic.CurrentPosition)
       .onGet(() => this.currentVolume);
 
