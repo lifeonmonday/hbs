@@ -68,6 +68,7 @@ class SmartSpeakerAccessory {
         this.targetMediaState = value;
 
         if (value === this.Characteristic.TargetMediaState.PLAY) {
+          this.speakerService.updateCharacteristic(this.Characteristic.CurrentMediaState, 3); // LOADING
           try {
             await this.spotifyClient.play(this.config.deviceId);
             this.currentMediaState = this.Characteristic.CurrentMediaState.PLAY;
