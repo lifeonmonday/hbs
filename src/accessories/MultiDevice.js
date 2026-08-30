@@ -62,7 +62,11 @@ class MultiDeviceAccessory {
 
     // 3. WindowCovering Service (The "Volume Slider" Hack)
     this.volumeService = accessory.addService(this.Service.WindowCovering, 'Volume', 'vol_covering');
-
+    
+    // Explicitly tell HomeKit this service does not contribute to the "Active" status of the tile
+    this.volumeService.addCharacteristic(this.Characteristic.StatusActive);
+    this.volumeService.setCharacteristic(this.Characteristic.StatusActive, false);
+    
     this.volumeService.getCharacteristic(this.Characteristic.CurrentPosition)
       .onGet(() => this.currentVolume);
 
