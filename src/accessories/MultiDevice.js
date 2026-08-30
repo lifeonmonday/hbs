@@ -60,34 +60,23 @@ class MultiDeviceAccessory {
       .onGet(() => this.currentVolume)
       .onSet(async (val) => { await this.spotifyClient.setVolume(val, this.config.deviceId); this.currentVolume = val; });
 
-    // // 3. Fan Service (The "Speed" Volume Slider Hack)
-    this.fanService = accessory.addService(this.Service.Fanv2, 'Volume', 'vol_fan_v2');
+    // 3. WindowCovering Service (The "Volume Slider" Hack)
+    this.volumeService = accessory.addService(this.Service.WindowCovering, 'Volume', 'vol_covering');
 
-       // Use Active to sync power state with the TV
-       this.fanService.getCharacteristic(this.Characteristic.Active)
-         .onGet(() => (this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE))
-         .onSet(async (value) => {
-           const shouldPlay = value === this.Characteristic.Active.ACTIVE;
-           if (shouldPlay) {
-             try { await this.spotifyClient.play(this.config.deviceId); this.isPlaying = true; }
-             catch (err) { await this.triggerClient.triggerWakeupSwitch(); this.isPlaying = true; }
-           } else {
-             await this.spotifyClient.pause(this.config.deviceId); this.isPlaying = false;
-           }
-           // Update both TV and Fan power states to keep them perfectly in sync
-           this.tvService.updateCharacteristic(this.Characteristic.Active, value);
-         });
+    this.volumeService.getCharacteristic(this.Characteristic.CurrentPosition)
+      .onGet(() => this.currentVolume);
 
-       // RotationSpeed as the Volume Slider
-       this.fanService.getCharacteristic(this.Characteristic.RotationSpeed)
-         .setProps({ minValue: 0, maxValue: 100, minStep: 5 })
-         .onGet(() => this.currentVolume)
-         .onSet(async (val) => {
-           await this.spotifyClient.setVolume(val, this.config.deviceId);
-           this.currentVolume = val;
-         });
+    this.volumeService.getCharacteristic(this.Characteristic.TargetPosition)
+      .onGet(() => this.currentVolume)
+      .onSet(async (val) => {
+        await this.spotifyClient.setVolume(val, this.config.deviceId);
+        this.currentVolume = val;
+        this.volumeService.updateCharacteristic(this.Characteristic.CurrentPosition, val);
+      });
 
-    this.tvService.addLinkedService(this.fanService);
+    this.volumeService.setCharacteristic(this.Characteristic.PositionState, this.Characteristic.PositionState.STOPPED);
+
+    this.tvService.addLinkedService(this.volumeService);
 
     // 3. Lightbulb (The Visible Slider)
 //    this.lightbulbService = accessory.addService(this.Service.Lightbulb, 'Volume Slider', 'vol_slider');
@@ -128,73 +117,65 @@ class MultiDeviceAccessory {
   /**
    * Start polling for playback state changes
    */
-  startPolling() {
-    const interval = (this.config.pollInterval || 5) * 1000;
+   startPolling() {
+     const interval = (this.config.pollInterval || 5) * 1000;
 
-    this.pollingInterval = setInterval(async () => {
-      try {
-        const state = await this.spotifyClient.getPlaybackState();
+     this.pollingInterval = setInterval(async () => {
+       try {
+         const state = await this.spotifyClient.getPlaybackState();
 
-        if (!state || !state.device || (this.config.deviceId && state.device.id !== this.config.deviceId)) {
-          this.isPlaying = false;
-          this.tvService.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.INACTIVE);
-          if (this.currentTrack !== 'Not Playing') {
-            this.currentTrack = 'Not Playing';
-            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Not Playing');
-          }
-          return;
-        }
+         if (!state || !state.device || (this.config.deviceId && state.device.id !== this.config.deviceId)) {
+           this.isPlaying = false;
+           this.tvService.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.INACTIVE);
+           if (this.currentTrack !== 'Not Playing') {
+             this.currentTrack = 'Not Playing';
+             this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Not Playing');
+           }
+           return;
+         }
 
-        this.isPlaying = state.is_playing;
-        this.tvService.updateCharacteristic(
-          this.Characteristic.Active,
-          this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE
-        );
+         this.isPlaying = state.is_playing;
+         this.tvService.updateCharacteristic(
+           this.Characteristic.Active,
+           this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE
+         );
 
-        // Update Fan Power (Active) and Speed (Volume)
-             this.fanService.updateCharacteristic(
-               this.Characteristic.Active,
-               this.isPlaying ? this.Characteristic.Active.ACTIVE : this.Characteristic.Active.INACTIVE
-             );
+         if (state.device.volume_percent !== null && state.device.volume_percent !== undefined) {
+           this.currentVolume = state.device.volume_percent;
+           // Update the hidden Speaker service
+           this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
+           this.speakerService.updateCharacteristic(this.Characteristic.Mute, this.currentVolume === 0);
 
+           // Update the WindowCovering slider
+           this.volumeService.updateCharacteristic(this.Characteristic.CurrentPosition, this.currentVolume);
+           this.volumeService.updateCharacteristic(this.Characteristic.TargetPosition, this.currentVolume);
+         }
 
-        if (state.device.volume_percent !== null && state.device.volume_percent !== undefined) {
-          this.currentVolume = state.device.volume_percent;
-          this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
-          this.speakerService.updateCharacteristic(this.Characteristic.Mute, this.currentVolume === 0);
-          // this.lightbulbService.updateCharacteristic(this.Characteristic.Brightness, this.currentVolume);
-          // Sync the fan speed
-          this.fanService.updateCharacteristic(this.Characteristic.RotationSpeed, this.currentVolume);
+         // Track display logic...
+         if (state.is_playing && state.item && state.item.artists && state.item.artists.length > 0) {
+           const artistNames = state.item.artists.map((a) => a.name).join(', ');
+           const trackText = `${state.item.name} · ${artistNames}`;
+           if (this.currentTrack !== trackText) {
+             this.currentTrack = trackText;
+             this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, trackText);
+           }
+         } else {
+           if (this.currentTrack !== 'Playing') {
+             this.currentTrack = 'Playing';
+             this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Playing');
+           }
+         }
 
-        }
+         this.tvService.updateCharacteristic(this.Characteristic.ActiveIdentifier, 0);
+         this.pollErrorCount = 0;
+       } catch (err) {
+         this.log.warn(`Polling error: ${err.message}`);
+         this.pollErrorCount++;
+         if (this.pollErrorCount > 10) { this.stopPolling(); }
+       }
+     }, interval);
+   }
 
-        // Update track display in input source with all artists
-        if (state.is_playing && state.item && state.item.artists && state.item.artists.length > 0) {
-          const artistNames = state.item.artists.map((a) => a.name).join(', ');
-          const trackText = `${state.item.name} · ${artistNames}`;
-          if (this.currentTrack !== trackText) {
-            this.currentTrack = trackText;
-            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, trackText);
-          }
-        } else {
-          if (this.currentTrack !== 'Playing') {
-            this.currentTrack = 'Playing';
-            this.trackInputService.updateCharacteristic(this.Characteristic.ConfiguredName, 'Playing');
-          }
-        }
-
-        this.tvService.updateCharacteristic(this.Characteristic.ActiveIdentifier, 0);
-        this.pollErrorCount = 0;
-      } catch (err) {
-        this.log.warn(`Polling error: ${err.message}`);
-        this.pollErrorCount++;
-        if (this.pollErrorCount > 10) {
-          this.log.error('Stopping polling after repeated errors');
-          this.stopPolling();
-        }
-      }
-    }, interval);
-  }
 
   /**
    * Stop the polling interval
