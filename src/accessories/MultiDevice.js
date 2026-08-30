@@ -60,47 +60,29 @@ class MultiDeviceAccessory {
       .onGet(() => this.currentVolume)
       .onSet(async (val) => { await this.spotifyClient.setVolume(val, this.config.deviceId); this.currentVolume = val; });
 
-    // 3. WindowCovering Service (The "Volume Slider" Hack)
-    this.volumeService = accessory.addService(this.Service.WindowCovering, 'Volume', 'vol_covering');
+    // 3. Lightbulb (The Visible Slider)
+    this.lightbulbService = accessory.addService(this.Service.Lightbulb, 'Volume', 'vol_slider');
 
-    // Explicitly tell HomeKit this service does not contribute to the "Active" status of the tile
-    this.volumeService.addCharacteristic(this.Characteristic.StatusActive);
-    this.volumeService.setCharacteristic(this.Characteristic.StatusActive, false);
+    // Add 'On' characteristic to link it to AVR power state
+    this.lightbulbService.getCharacteristic(this.Characteristic.On)
+      .onGet(() => this.isPlaying)
+      .onSet(async (val) => {
+        // If user turns off the "light" (volume slider), pause playback
+        if (!val) {
+          await this.spotifyClient.pause(this.config.deviceId);
+          this.isPlaying = false;
+        }
+      });
 
-    this.volumeService.getCharacteristic(this.Characteristic.CurrentPosition)
-      .onGet(() => this.currentVolume);
-
-    this.volumeService.getCharacteristic(this.Characteristic.TargetPosition)
+    this.lightbulbService.getCharacteristic(this.Characteristic.Brightness)
+      .setProps({ minValue: 0, maxValue: 100, minStep: 5 })
       .onGet(() => this.currentVolume)
       .onSet(async (val) => {
         await this.spotifyClient.setVolume(val, this.config.deviceId);
         this.currentVolume = val;
-        this.volumeService.updateCharacteristic(this.Characteristic.CurrentPosition, val);
       });
 
-    this.volumeService.setCharacteristic(this.Characteristic.PositionState, this.Characteristic.PositionState.STOPPED);
-
-    this.tvService.addLinkedService(this.volumeService);
-
-    // 3. Lightbulb (The Visible Slider)
-//    this.lightbulbService = accessory.addService(this.Service.Lightbulb, 'Volume Slider', 'vol_slider');
-
-    // Add 'On' characteristic and force it to 'true' so the slider is always accessible
-    // this.lightbulbService.getCharacteristic(this.Characteristic.On)
-    //  .onGet(() => true)
-    //  .onSet(async (val) => {
-        // Optional: If you click the slider "off", do nothing or pause playback
-    //    if (!val) await this.spotifyClient.pause(this.config.deviceId);
-    //  });
-
-//    this.lightbulbService.getCharacteristic(this.Characteristic.Brightness)
-//      .setProps({ minValue: 0, maxValue: 100, minStep: 5 })
-//      .onGet(() => this.currentVolume)
-//      .onSet(async (val) => {
-//        await this.spotifyClient.setVolume(val, this.config.deviceId);
-//        this.currentVolume = val;
-//      });
-//
+    this.tvService.addLinkedService(this.lightbulbService);
 
 
     // 4. Input Source
@@ -150,9 +132,9 @@ class MultiDeviceAccessory {
            this.speakerService.updateCharacteristic(this.Characteristic.Volume, this.currentVolume);
            this.speakerService.updateCharacteristic(this.Characteristic.Mute, this.currentVolume === 0);
 
-           // Update the WindowCovering slider
-           this.volumeService.updateCharacteristic(this.Characteristic.CurrentPosition, this.currentVolume);
-           this.volumeService.updateCharacteristic(this.Characteristic.TargetPosition, this.currentVolume);
+           // Update the Lightbulb slider
+           this.lightbulbService.updateCharacteristic(this.Characteristic.Brightness, this.currentVolume);
+           this.lightbulbService.updateCharacteristic(this.Characteristic.On, this.isPlaying);
          }
 
          // Track display logic...
